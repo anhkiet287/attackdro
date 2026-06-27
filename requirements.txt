@@ -1,0 +1,11 @@
+# NOTE: Do NOT add torch / torchvision here.
+# PyTorch must be installed separately with the CUDA 12.8 (cu128) build so it
+# supports the RTX 5070 Ti (Blackwell / sm_120). See SETUP.md.
+
+numpy
+pyyaml
+tqdm
+matplotlib
+# Experiment tracking (optional but recommended for a paper):
+# tensorboard
+# wandb

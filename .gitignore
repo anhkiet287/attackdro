@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.python-version
+
+# Data & model artifacts (keep the repo light)
+data/
+!data/.gitkeep
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+runs/
+checkpoints/
+outputs/
+wandb/
+lightning_logs/
+
+# Notebooks
+.ipynb_checkpoints/
+notebooks/*.ipynb_outputs/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Job-queue runtime (keep the folder structure via .gitkeep)
+jobs/queue/*
+jobs/running/*
+jobs/done/*
+jobs/failed/*
+jobs/logs/*
+jobs/agent.out
+!jobs/**/.gitkeep
+
+# Secrets
+.env
+*.key
+.git.broken.bak/
