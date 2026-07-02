@@ -1,0 +1,32 @@
+# =============================================================================
+# attackdro.yaml — AttackDRO++ (GroupDRO over the (linf, l2, l1) union).
+# Inherits the LOCKED protocol from base.yaml (eps_inf=0.03, l2=0.5, l1=12).
+# P1 change vs the thesis: L1 is now a source attack (thesis used only linf/l2).
+# =============================================================================
+_base_: configs/base.yaml
+
+method: attackdro
+run_name: attackdro_union
+
+train:
+  epochs: 50
+  batch_size: 128
+  lr: 0.1
+  momentum: 0.9
+  weight_decay: 0.0005
+  lr_schedule: multistep
+  milestones: [25, 40]          # for 50 epochs (~50%, 80%)
+
+  groupdro:
+    eta_q: 0.02                 # q learning rate (log-space multiplicative update)
+    warmup_epochs: 0            # delay q updates (0 = update from epoch 0)
+
+  # Union SOURCE attacks (one group each). eps comes from base.threat_model.
+  attacks:
+    - { norm: linf, steps: 10, step_size: 0.00784313725, random_start: true }   # 2/255
+    - { norm: l2,   steps: 10, step_size: 0.125,          random_start: true }
+    - { norm: l1,   steps: 20, step_size: 0.05, k: 20, gap: 0.05, random_k: true, random_start: false }
+
+  # Cheap in-training union probe (NOT final eval — that is eval_union/APGD).
+  eval_pgd_steps: 20
+  eval_probe_batches: 8

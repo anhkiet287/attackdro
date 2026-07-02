@@ -6,6 +6,10 @@ numpy
 pyyaml
 tqdm
 matplotlib
-# Experiment tracking (optional but recommended for a paper):
-# tensorboard
-# wandb
+# Experiment tracking
+wandb==0.28.0
+# tensorboard  # optional alternative
+
+# Strong evaluation attacks (APGD linf/l2/l1) — official AutoAttack.
+# Installed from git (PyPI lags); reports version 0.1.
+autoattack @ git+https://github.com/fra31/auto-attack.git

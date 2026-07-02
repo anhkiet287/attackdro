@@ -1,0 +1,27 @@
+# =============================================================================
+# bindaware_v2.yaml — CARD-3a-v2: VAL-CALIBRATED q (evidence-gated; gate OPENED
+# 2026-07-02 by the probe-vs-APGD diagnostic: l1 bias +12.3pp + ranking inversion).
+# Inherits bindaware.yaml; the ONLY change is the SIGNAL SOURCE:
+#   in-training PGD probe (biased, inverts weakest norm) ->
+#   reduced APGD-CE (val_iters) on a held-out val split (last 1000 train imgs,
+#   excluded from training), every val_every epochs, EMA-smoothed,
+#   q = softmax(-acc_ema / tau).
+# CAVEATS (disclose in paper): q tuned with an eval-family attack (val != test,
+# 3 scalars / 5 epochs of leakage); still group-level -> F4 ceiling applies;
+# train set is 49k (holdout excluded). Complements, does not replace, CARD-3b.
+# =============================================================================
+_base_: configs/bindaware.yaml
+
+method: attackdro
+run_name: bindaware_v2
+
+dataset:
+  val_holdout: 1000        # last 1000 train imgs held out for calibration
+
+train:
+  groupdro:
+    weight_signal: val_apgd
+    val_every: 5           # calibrate every k epochs (epoch 0 included)
+    val_iters: 30          # reduced APGD-CE iterations (NOT full DDN/CW ensemble)
+    ema_beta: 0.5          # acc_ema = beta*new + (1-beta)*old
+    tau: 0.1

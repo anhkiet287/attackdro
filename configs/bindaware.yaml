@@ -1,0 +1,16 @@
+# =============================================================================
+# bindaware.yaml — CARD-3a: GROUP binding-aware weighting.
+# Inherits attackdro.yaml; the ONLY change is the weighting SIGNAL:
+#   q = softmax(-robust_acc_g / tau), set once per epoch from the cheap per-norm
+#   probe (weakest norm -> most weight), REPLACING the per-step loss update.
+# Aims q directly at the union-binding norm instead of raw per-group loss scale.
+# =============================================================================
+_base_: configs/attackdro.yaml
+
+method: attackdro          # same trainer; different q signal
+run_name: bindaware
+
+train:
+  groupdro:
+    weight_signal: robust_acc   # vs default "loss" (P1 AttackDRO++)
+    tau: 0.1                     # softmax temperature over -robust_acc; sweep {0.05,0.1}
