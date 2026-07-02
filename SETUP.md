@@ -233,6 +233,54 @@ cat ~/.ssh/id_ed25519.pub     # add this to GitHub → Settings → SSH keys
 
 ---
 
+## 7b. Weights & Biases — one-time login (reusable forever)
+
+Experiment logging goes through W&B. You log in **once** on the PC and every run
+afterward just works — no per-run setup. The plumbing is `src/robustdro/utils/wandb_log.py`
+(a small `WandbLogger` used by every script) and the `wandb:` block in `configs/base.yaml`.
+
+**One-time login** (persists your API key to `~/.netrc`, reused by all future runs):
+
+```bash
+# Get your key from https://wandb.ai/authorize , then:
+.venv/bin/wandb login
+# paste the key when prompted
+```
+
+That's it. Confirm it took:
+
+```bash
+.venv/bin/wandb login --verify      # prints "Currently logged in as: <you>"
+```
+
+**How runs are configured.** Edit the `wandb:` block in `configs/base.yaml` once:
+
+```yaml
+wandb:
+  mode: online          # online | offline | disabled
+  project: union-robustness-dro
+  entity: null          # null = your default entity; or set your W&B username/team
+```
+
+- `mode: online` → logs live to wandb.ai (needs the login above).
+- `mode: offline` → logs to a local `wandb/` dir; push later with `wandb sync wandb/offline-run-*`.
+- `mode: disabled` → no W&B, metrics still print to stdout.
+
+**Per-run override** without editing configs (handy for smoke tests / CI):
+
+```bash
+# CLI flag:
+python scripts/train.py --config configs/pgd_at.yaml --wandb-mode offline
+# or env var (wins over config):
+WANDB_MODE=disabled python scripts/train.py --config configs/pgd_at.yaml
+```
+
+The logger **never crashes a run**: if you're not logged in or offline, it falls
+back to stdout-only instead of raising — so a training run is never lost to a
+logging hiccup. Metrics are also always written to `results/<run_name>.json`.
+
+---
+
 ## 8. Verify everything works (test checklist)
 
 Run these in order. Each one confirms a layer; if one fails, fix it before moving on.

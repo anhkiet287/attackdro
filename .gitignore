@@ -18,6 +18,7 @@ data/
 runs/
 checkpoints/
 outputs/
+results/
 wandb/
 lightning_logs/
 
@@ -44,3 +45,9 @@ jobs/agent.out
 .env
 *.key
 .git.broken.bak/
+
+# Training logs
+logs/
+
+# External baseline repos (not ours)
+external/
