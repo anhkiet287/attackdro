@@ -8,8 +8,9 @@ env/
 .python-version
 
 # Data & model artifacts (keep the repo light)
-data/
-!data/.gitkeep
+# Anchored to repo root — an unanchored `data/` also swallows src/robustdro/data/.
+/data/
+!/data/.gitkeep
 *.pt
 *.pth
 *.ckpt
