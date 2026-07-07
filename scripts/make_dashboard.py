@@ -17,8 +17,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 RESULTS = ROOT / "results"
-MEMORY = DOCS / "MEMORY.md"
-LOG = DOCS / "LOG.md"
+STATE = DOCS / "PROJECT_STATE.md"          # consolidated sync surface (was MEMORY.md + LOG.md)
+LOG = DOCS / "legacy" / "LOG.md"           # retired; still read for the timeline history
 OUT = DOCS / "dashboard.html"
 
 
@@ -250,6 +250,17 @@ def render_fragment(markdown: str) -> str:
     return "\n".join(html)
 
 
+def extract_section_like(markdown: str, needle: str) -> str:
+    """Extract the body under the first `## ...<needle>...` header (substring match) —
+    robust to PROJECT_STATE's numbered/decorated headers (e.g. '## 4 · FINDINGS F1-F9')."""
+    m = re.search(rf"^##\s+.*{re.escape(needle)}.*$", markdown, flags=re.MULTILINE)
+    if not m:
+        return ""
+    start = m.end()
+    nxt = re.search(r"^##\s+", markdown[start:], flags=re.MULTILINE)
+    return (markdown[start:start + nxt.start()] if nxt else markdown[start:]).strip()
+
+
 def extract_section(markdown: str, title: str) -> str:
     match = re.search(rf"^##\s+{re.escape(title)}\s*$", markdown, flags=re.MULTILINE)
     if not match:
@@ -261,7 +272,7 @@ def extract_section(markdown: str, title: str) -> str:
 
 
 def status_cards(memory_md: str) -> str:
-    phase = extract_section(memory_md, "Phase gates")
+    phase = extract_section_like(memory_md, "CURRENT PHASE")
     candidates = {
         "Phase": "",
         "Gate": "",
@@ -600,8 +611,8 @@ def timeline_entries(log_md: str) -> str:
 
 
 def main() -> None:
-    memory_md = read_text(MEMORY)
-    log_md = read_text(LOG)
+    memory_md = read_text(STATE)                       # PROJECT_STATE.md (consolidated)
+    log_md = read_text(LOG) if LOG.exists() else ""     # legacy timeline (optional)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     template = Template(
@@ -799,7 +810,7 @@ def main() -> None:
 <body>
   <header>
     <h1>AttackDRO Dashboard</h1>
-    <p>Regenerated from <code>docs/MEMORY.md</code>, <code>docs/LOG.md</code>, and <code>results/*.json</code> at $generated_at.</p>
+    <p>Regenerated from <code>docs/PROJECT_STATE.md</code> and <code>results/*.json</code> (+ <code>run_status.json</code>) at $generated_at.</p>
   </header>
   <main>
     <div class="status">$status_cards</div>
@@ -863,8 +874,8 @@ def main() -> None:
         experiment_status=experiment_status(run_status, rows_by_name, live),
         compare_view=compare_view(rows),
         results_table=results_table(rows),
-        findings=render_fragment(extract_section(memory_md, "Findings F1-F7")),
-        open_items=render_fragment(extract_section(memory_md, "Open items")),
+        findings=render_fragment(extract_section_like(memory_md, "FINDINGS")),
+        open_items=render_fragment(extract_section_like(memory_md, "CURRENT PHASE")),
         timeline=timeline_entries(log_md),
     )
 
