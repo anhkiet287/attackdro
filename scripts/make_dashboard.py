@@ -645,6 +645,57 @@ def timeline_entries(log_md: str) -> str:
               f'</summary>{older}</details>')
 
 
+def render_ramp_chart() -> str:
+    """Inline SVG line chart of RAMP worst-union vs epoch (single series → one hue, no
+    legend; native <title> hover; ep70 lr-drop annotation = the story). Data-driven from
+    the eval JSONs; empty string if any epoch is missing."""
+    eps = [10, 20, 30, 40, 50, 60, 70, 80]
+    pts = []
+    for e in eps:
+        p = RESULTS / f"eval_ramp_ep{e}_eps8255_apgd_n1000.json"
+        if not p.exists():
+            return ""
+        try:
+            m = json.loads(p.read_text(encoding="utf-8"))["metrics"]
+            pts.append((e, 100 * m["worst_union_acc"]))
+        except Exception:
+            return ""
+    W, H, Lm, Rm, Tm, Bm = 760, 320, 54, 92, 22, 46
+    pw, ph = W - Lm - Rm, H - Tm - Bm
+    ymin, ymax = 30, 48
+
+    def X(e):
+        return Lm + (e - eps[0]) / (eps[-1] - eps[0]) * pw
+
+    def Y(u):
+        return Tm + (ymax - u) / (ymax - ymin) * ph
+
+    grid = "".join(
+        f'<line x1="{Lm}" y1="{Y(g):.1f}" x2="{Lm + pw}" y2="{Y(g):.1f}" class="ch-grid"/>'
+        f'<text x="{Lm - 8}" y="{Y(g) + 4:.1f}" class="ch-ylab" text-anchor="end">{g}</text>'
+        for g in (30, 35, 40, 45))
+    xlab = "".join(f'<text x="{X(e):.1f}" y="{Tm + ph + 18}" class="ch-xlab" text-anchor="middle">{e}</text>'
+                   for e in eps)
+    x70 = X(70)
+    anno = (f'<line x1="{x70:.1f}" y1="{Tm}" x2="{x70:.1f}" y2="{Tm + ph}" class="ch-anno"/>'
+            f'<text x="{x70 - 7:.1f}" y="{Tm + 12}" class="ch-annolab" text-anchor="end">lr-drop 0.05→0.005 @ep70</text>')
+    poly = " ".join(f"{X(e):.1f},{Y(u):.1f}" for e, u in pts)
+    dots = "".join(f'<circle cx="{X(e):.1f}" cy="{Y(u):.1f}" r="4.5" class="ch-dot">'
+                   f'<title>ep{e}: union {u:.1f}%</title></circle>' for e, u in pts)
+    trough = min(pts, key=lambda pu: pu[1])
+    labels = (f'<text x="{X(80) + 8:.1f}" y="{Y(pts[-1][1]) + 4:.1f}" class="ch-endlab">{pts[-1][1]:.1f}</text>'
+              f'<text x="{X(eps[0]):.1f}" y="{Y(pts[0][1]) - 9:.1f}" class="ch-lab" text-anchor="middle">{pts[0][1]:.1f}</text>'
+              f'<text x="{X(trough[0]):.1f}" y="{Y(trough[1]) + 17:.1f}" class="ch-lab" text-anchor="middle">{trough[1]:.1f}</text>')
+    ytitle = (f'<text transform="rotate(-90)" x="{-(Tm + ph / 2):.1f}" y="15" '
+              f'class="ch-axtitle" text-anchor="middle">worst-union robust acc (%)</text>')
+    xtitle = f'<text x="{Lm + pw / 2:.1f}" y="{H - 6}" class="ch-axtitle" text-anchor="middle">training epoch</text>'
+    return (f'<figure class="ch-fig"><svg viewBox="0 0 {W} {H}" class="ch-svg" role="img" '
+            f'aria-label="RAMP worst-union robust accuracy versus training epoch at eps 8/255, APGD n=1000">'
+            f'{grid}{anno}<polyline points="{poly}" class="ch-line"/>{dots}{labels}{xlab}{ytitle}{xtitle}</svg>'
+            f'<figcaption class="ch-cap">RAMP union vs epoch @8/255 (APGD n=1000) — plateaus ~43 across '
+            f'ep30–70, jumps to 46 only after the ep70 lr-drop; ep50 (42.9) is a local trough.</figcaption></figure>')
+
+
 _SRC_LABEL = {"in-house": "IN-HOUSE", "cited": "CITED", "cross-confirmed": "CROSS-CONFIRMED"}
 
 
@@ -906,6 +957,20 @@ def main() -> None:
     .fchain summary { cursor: pointer; color: var(--accent); font-weight: 700; }
     .fchain ol { margin: 6px 0 2px 0; padding-left: 20px; }
     .fchain li { margin: 5px 0; color: var(--ink); }
+    /* --- RAMP union-vs-epoch chart (P-07): single-series line --- */
+    .ch-fig { margin: 0 0 10px; }
+    .ch-svg { width: 100%; height: auto; max-width: 760px; display: block; }
+    .ch-grid { stroke: var(--line); stroke-width: 1; }
+    .ch-ylab, .ch-xlab { fill: var(--muted); font-size: 12px; }
+    .ch-axtitle { fill: var(--muted); font-size: 12px; font-weight: 600; }
+    .ch-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+    .ch-dot { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; }
+    .ch-dot:hover { r: 6; }
+    .ch-anno { stroke: var(--accent-2); stroke-width: 1.5; stroke-dasharray: 4 3; opacity: .65; }
+    .ch-annolab { fill: var(--accent-2); font-size: 11px; font-weight: 600; }
+    .ch-endlab { fill: var(--accent); font-size: 13px; font-weight: 800; }
+    .ch-lab { fill: var(--ink); font-size: 11px; font-weight: 600; }
+    .ch-cap { color: var(--muted); font-size: .8rem; margin-top: 4px; }
   </style>
 </head>
 <body>
@@ -930,6 +995,7 @@ def main() -> None:
     </section>
     <section>
       <h2>RAMP epoch curve (reference)</h2>
+      $ramp_chart
       $ramp_curve
     </section>
     <section>
@@ -981,6 +1047,7 @@ def main() -> None:
         experiment_status=experiment_status(run_status, rows_by_name, live),
         compare_view=compare_view(rows),
         results_table=results_table(rows),
+        ramp_chart=render_ramp_chart(),
         findings=render_findings(load_findings()),
         open_items=render_fragment(extract_section_like(memory_md, "CURRENT PHASE")),
         ramp_curve=render_fragment((RESULTS / "ramp_epoch_curve.md").read_text(encoding="utf-8"))
