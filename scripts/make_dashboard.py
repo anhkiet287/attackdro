@@ -994,8 +994,11 @@ def main() -> None:
       $results_table
     </section>
     <section>
-      <h2>RAMP epoch curve (reference)</h2>
+      <h2>RAMP union-vs-epoch curve @8/255 (n=1000, APGD, restarts=1)</h2>
       $ramp_chart
+    </section>
+    <section>
+      <h2>RAMP epoch curve (reference)</h2>
       $ramp_curve
     </section>
     <section>
@@ -1050,7 +1053,7 @@ def main() -> None:
         ramp_chart=render_ramp_chart(),
         findings=render_findings(load_findings()),
         open_items=render_fragment(extract_section_like(memory_md, "CURRENT PHASE")),
-        ramp_curve=render_fragment((RESULTS / "ramp_epoch_curve.md").read_text(encoding="utf-8"))
+        ramp_curve=render_fragment(re.sub(r"^#\s.*\n", "", (RESULTS / "ramp_epoch_curve.md").read_text(encoding="utf-8"), count=1))
         if (RESULTS / "ramp_epoch_curve.md").exists() else "<p>No ramp_epoch_curve.md yet.</p>",
         timeline=timeline_entries(log_md),
     )
