@@ -58,8 +58,12 @@ class GroupDROTrainer:
         # Source attacks (groups). eps from the locked protocol per norm.
         tm = cfg["threat_model"]
         self.attack_specs = tcfg["attacks"]
+        # Training inner-max attack class: 'apgd' (RAMP-matched: momentum+adaptive+best-iterate,
+        # incl. APGD-l1) or 'pgd' (plain fixed-step). Reactive AND predictive craft with this;
+        # for predictive the floor attacks use it too (see _rebuild_floor).
+        self.train_attack = tcfg.get("attack", "pgd")
         self.group_norms = [s["norm"].lower() for s in self.attack_specs]
-        self.attacks = [build_source_attack(s, eps=tm[s["norm"].lower()]["eps"])
+        self.attacks = [build_source_attack(s, eps=tm[s["norm"].lower()]["eps"], attack=self.train_attack)
                         for s in self.attack_specs]
         self.num_groups = len(self.attacks)
 
@@ -198,7 +202,7 @@ class GroupDROTrainer:
         and whenever the floor changes (confidence recompute or adaptive guard)."""
         spec = {**self.attack_specs[g], "steps": max(1, self._floor_steps(g))}
         self.floor_attacks[g] = build_source_attack(
-            spec, eps=self.cfg["threat_model"][spec["norm"].lower()]["eps"])
+            spec, eps=self.cfg["threat_model"][spec["norm"].lower()]["eps"], attack=self.train_attack)
 
     def _recompute_conf_floor(self) -> None:
         """v2 Option B: set each norm's confidence floor from its measured miss rate

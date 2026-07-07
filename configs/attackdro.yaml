@@ -17,6 +17,7 @@ train:
   lr_schedule: multistep
   milestones: [25, 40]          # for 50 epochs (~50%, 80%)
   save_freq: 10                 # checkpoint every N epochs -> ckpt/ep010.pt.. (epoch curves + PHASE-2 continuation)
+  attack: apgd                  # TRAINING inner-max = APGD (RAMP-matched: momentum+adaptive+best-iter, incl APGD-l1). was plain PGD; 'pgd' to revert. steps (10/10/10) = APGD n_iter.
 
   groupdro:
     eta_q: 0.02                 # q learning rate (log-space multiplicative update)

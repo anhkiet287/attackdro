@@ -12,7 +12,7 @@ below before wiring live numbers. Until then this is hand-maintained.)*
 - **Schedule:** SGD, **lr 0.05 for epochs 1–70, then 0.005 (×10 drop) for 71–80**, momentum 0.9,
   weight_decay 5e-4. (RAMP `--lr-schedule=static`; our `milestones:[70]` = exact match.)
 - **Epochs:** 80. **Save every 10** → epoch curves for ALL methods (needs trainer save_freq — FLAG 1).
-- **Training inner-max attack:** **uniform 10/10/10** (RAMP `--at_iter 10`). Changed from 10/10/20.
+- **Training inner-max attack:** **APGD, 10 steps all norms** (P-10, RAMP-matched: `autopgd_train`, incl. APGD-l1). Supersedes plain-PGD 10/10/10 & 10/10/20 — RAMP trains with APGD (paper 3×, code); we trained plain top-k PGD but eval'd with APGD → the train/eval attack-class mismatch was the l1 root cause. Ported + verified (APGD-10 +11.6pp stronger than PGD-10). FLOPs denom = 30.
 - **eps:** (8/255, 0.5, 12), **train == eval**.
 - RAMP-only method params (not ours): λ (KL weight), β=0.5. **FLAG 4: our RAMP repro used λ=5; paper
   cites λ=2** — Table-5 cross-check (42.9=42.9) says λ=5 reproduces RAMP faithfully; reconcile before
@@ -21,7 +21,7 @@ below before wiring live numbers. Until then this is hand-maintained.)*
 ## Attack-step policy (F1-safe — documented, do not violate)
 | use | attack | steps (linf/l2/l1) | note |
 |---|---|---|---|
-| **TRAINING inner-max** | PGD (source) | **10 / 10 / 10** | RAMP-matched, uniform |
+| **TRAINING inner-max** | **APGD** (RAMP-matched: `autopgd_train`, incl. APGD-l1) | **10 / 10 / 10** (n_iter) | supersedes plain-PGD; APGD-10 +11.6pp > PGD-10 → closes the l1 train/eval mismatch. FLOPs denom = 30. |
 | **EVAL — develop/screening** | APGD, n=1000 | **20 / 20 / 100** (measured plateaus, P-04) | l1-heavy; = full 100/100/100 exactly, ~53% faster; l1 never shortchanged (F1) |
 | **EVAL — final claim rows** | **full AutoAttack** | CE+T+FAB+Square to convergence | matches RAMP; APGD-only reads ~1.5pp high (why our RAMP repro 46.1 > paper 44.6) |
 - **Training uniform-10 does NOT make eval uniform.** Eval keeps l1 ≥ linf/l2.

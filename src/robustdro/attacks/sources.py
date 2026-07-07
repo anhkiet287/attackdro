@@ -8,12 +8,32 @@ than it is evaluated at (golden rule #1).
 
 from __future__ import annotations
 
+from .apgd_train import apgd_train as _apgd_train
 from .norms import pgd_l1_topk, pgd_l2, pgd_linf
 
+_RAMP_NORM = {"linf": "Linf", "l2": "L2", "l1": "L1"}
 
-def build_source_attack(spec: dict, eps: float):
+
+def build_source_attack(spec: dict, eps: float, attack: str = "pgd"):
+    """Return a training source-attack callable atk(model, x, y) -> x_adv.
+    attack='pgd'  -> plain fixed-step PGD (per-norm; l1 = top-k).
+    attack='apgd' -> APGD (RAMP-matched: momentum + adaptive step + best-iterate; l1 =
+                     adaptive top-k + L1 projection). `steps` = APGD n_iter (10 = RAMP)."""
     norm = spec["norm"].lower()
     steps = spec.get("steps", 10)
+
+    if attack == "apgd":
+        ramp_norm = _RAMP_NORM[norm]
+
+        def atk(model, x, y):
+            was_training = model.training
+            model.eval()                      # BN frozen while crafting (apgd_train needs eval)
+            x_adv = _apgd_train(model, x, y, norm=ramp_norm, eps=eps, n_iter=steps, is_train=True)
+            if was_training:
+                model.train()
+            return x_adv
+        return atk
+
     step_size = spec["step_size"]
     random_start = spec.get("random_start", True)
 
