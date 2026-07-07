@@ -18,7 +18,7 @@ import sys
 
 import torch
 
-REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
+REPO_ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
 sys.path.insert(0, os.path.join(REPO_ROOT, "src"))
 
 from robustdro.eval import evaluate_union, load_test_subset   # noqa: E402

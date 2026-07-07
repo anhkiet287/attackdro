@@ -43,6 +43,31 @@ def load_test_subset(cfg, n_examples=None, device="cpu"):
     return xs, ys
 
 
+def load_eval_checkpoint(checkpoint_path: str, cfg: dict, model_family: str = "robustdro",
+                         device: str = "cuda"):
+    """Load a checkpoint for evaluation.
+
+    model_family="robustdro" preserves the existing in-repo checkpoint format.
+    model_family="ramp" loads upstream RAMP PreActResNet18 checkpoints from
+    external/RAMP with activation="softplus1" and no input normalization.
+    """
+    if model_family == "ramp":
+        from ..models import load_ramp_checkpoint
+
+        return load_ramp_checkpoint(checkpoint_path, device=device), None
+    if model_family != "robustdro":
+        raise ValueError("Unknown model_family {!r}. Use 'robustdro' or 'ramp'.".format(model_family))
+
+    from ..models import build_model
+
+    ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    model_cfg = ckpt.get("cfg", cfg)
+    model = build_model(model_cfg)
+    model.load_state_dict(ckpt["model"])
+    model.to(device).eval()
+    return model, ckpt
+
+
 def evaluate_union(model, x, y, cfg, norms=("linf", "l2", "l1"),
                    version="apgd", device="cuda", bs=250, seed=0, log_fn=print):
     """Run per-norm strong attacks and apply the union rule.

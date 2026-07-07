@@ -52,3 +52,7 @@ logs/
 
 # External baseline repos (not ours)
 external/
+
+# leaked ramp virtualenv (never commit)
+.venv-ramp/
+.venv*/

@@ -20,6 +20,9 @@ train:
   groupdro:
     eta_q: 0.02                 # q learning rate (log-space multiplicative update)
     warmup_epochs: 0            # delay q updates (0 = update from epoch 0)
+    probe_binding: false        # Gate-alpha fixed indexed probe; opt in per run
+    probe_binding_size: 512
+    probe_binding_every: 1
 
   # Union SOURCE attacks (one group each). eps comes from base.threat_model.
   attacks:
