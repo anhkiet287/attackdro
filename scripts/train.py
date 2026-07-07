@@ -38,6 +38,11 @@ def parse_args():
     p.add_argument("--seed", type=int, default=None)
     p.add_argument("--wandb-mode", choices=["online", "offline", "disabled"], default=None)
     p.add_argument("--run-name", default=None)
+    p.add_argument("--resume", default=None,
+                   help="Resume from a checkpoint path, or 'auto' (=<run>/s<seed>/ckpt/last.pt). "
+                        "Restores model+optimizer+scheduler+epoch+RNG for a valid continuation.")
+    p.add_argument("--save-freq", type=int, default=None,
+                   help="Checkpoint every N epochs (ep010.pt ...) for epoch curves + continuation.")
     p.add_argument(
         "--set", action="append", default=[], metavar="KEY=VALUE",
         help="Generic dotted-key config override, repeatable. "
@@ -60,6 +65,8 @@ def main():
         "seed": args.seed,
         "wandb.mode": args.wandb_mode,
         "run_name": args.run_name,
+        "train.resume": args.resume,
+        "train.save_freq": args.save_freq,
     }
     # Generic --set KEY=VALUE overrides (YAML-parsed, so numbers/bools work).
     import yaml

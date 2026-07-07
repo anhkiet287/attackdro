@@ -94,8 +94,9 @@ ep_50 = 42.9** (same recipe, same pre-drop state — apples-to-apples).
 - **Save every 10 → epoch curves for ALL methods** → F7 story for the whole cluster, not just RAMP.
 - **Eval stays l1-heavy (F1-safe)** even though training is uniform-10. Final claim rows use full AA.
 
-## Implementation FLAGS (before launch)
-1. **save_freq**: add periodic (every-10) checkpointing (trainer saves best+last only now).
-2. **resume**: Phase-2 continuation needs optimizer/epoch/RNG restore (not yet supported).
-3. **l1 step_size @ 10 steps**: raised 0.05→0.10 to preserve reach; verify l1 training strength on the first reactive run.
-4. **λ reconcile**: RAMP reference λ=5 (ours, Table-5-validated) vs paper λ=2 — decide before citing RAMP.
+## Implementation status (was FLAGS — resolved 2026-07-07)
+1. ✅ **save_freq DONE**: every-N-epoch checkpoints (`save_freq: 10` in attackdro.yaml) → `results/<run>/s<seed>/ckpt/ep010.pt…`.
+2. ✅ **resume DONE + verified**: `--resume auto` restores model+optimizer+scheduler+epoch+RNG; continuity check PASS (`scripts/dev/resume_continuity_check.py` — resumed run reproduces the uninterrupted lr schedule incl. the drop). Phase-2 continuation is sound.
+3. ✅ **results layout DONE**: per-run `results/<run>/s<seed>/{train,eval,eval_fullAA,smoke}.json + ckpt/`, self-documenting `run_meta.json` (recipe/attack-steps/config-hash/git/eps). Dashboard reads nested + flat.
+4. ✅ **λ RESOLVED (P-02)**: λ=5 is RAMP's own from-scratch RN-18 value (`scripts/cifar10/RAMP_scratch_cifar10.sh`: `--lbd 5`); paper λ=2 is the WRN/TRADES variant. Recipe-matched by construction; no re-run.
+5. ✅ **l1 EVAL convergence CLOSED:** RAMP ep80 l1 APGD-100 = APGD-200 = 46.8 (Δ0) → screening 100/100/100 is F1-safe. ⏳ **Still verify** l1 TRAINING step_size 0.10 strength on the first reactive run.

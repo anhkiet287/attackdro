@@ -172,6 +172,41 @@ def load_results() -> list[ResultRow]:
             )
         )
 
+    # NEW per-run layout: results/<run>/s<seed>/eval.json (screening APGD) + eval_fullAA.json
+    # (final full-AA). results/archive/* is excluded (its subdirs are not s<seed>).
+    for path in sorted(RESULTS.glob("*/s*/eval*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        metrics = payload.get("metrics", payload)
+        if not isinstance(metrics, dict):
+            continue
+        union = pick(metrics, "worst_union_acc", "worst_union")
+        if union is None:
+            continue
+        per_norm = metrics.get("per_norm_robust_acc", {}) or {}
+        run = path.parent.parent.name              # results/<run>/s<seed>/eval.json -> <run>
+        seed = path.parent.name                    # s<seed>
+        suffix = "_fullAA" if "fullAA" in path.stem else ""
+        name = f"{run}_{seed}{suffix}"
+        rows.append(
+            ResultRow(
+                name=name,
+                clean=pick(metrics, "clean_acc", "clean"),
+                linf=pick(per_norm, "linf", "l_inf") if per_norm else pick(metrics, "linf"),
+                l2=pick(per_norm, "l2") if per_norm else pick(metrics, "l2"),
+                l1=pick(per_norm, "l1") if per_norm else pick(metrics, "l1"),
+                union=union,
+                n=pick(metrics, "n", "n_examples") or payload.get("n_examples", ""),
+                version=str(metrics.get("version", payload.get("version", ""))),
+                source=str(path.relative_to(RESULTS)),
+                tier=infer_tier(name, path.name),
+                eps=eps_label(payload),
+                flag=eps_flag(payload),
+            )
+        )
+
     rows.sort(key=lambda row: as_percent(row.union) if as_percent(row.union) is not None else -1, reverse=True)
     return rows
 
@@ -827,6 +862,10 @@ def main() -> None:
       <h2>Results</h2>
       $results_table
     </section>
+    <section>
+      <h2>RAMP epoch curve (reference)</h2>
+      $ramp_curve
+    </section>
     <div class="grid">
       <section>
         <h2>Findings</h2>
@@ -876,6 +915,8 @@ def main() -> None:
         results_table=results_table(rows),
         findings=render_fragment(extract_section_like(memory_md, "FINDINGS")),
         open_items=render_fragment(extract_section_like(memory_md, "CURRENT PHASE")),
+        ramp_curve=render_fragment((RESULTS / "ramp_epoch_curve.md").read_text(encoding="utf-8"))
+        if (RESULTS / "ramp_epoch_curve.md").exists() else "<p>No ramp_epoch_curve.md yet.</p>",
         timeline=timeline_entries(log_md),
     )
 

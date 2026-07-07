@@ -3,7 +3,7 @@
 > **CURRENT design + status live in `docs/PROJECT_STATE.md` §5.** This doc is the detailed
 > rationale/FLOPs-math. UPDATED since drafting: the miss driver is now **P(true=g ∧ b̂≠g)
 > (population-aware volume)**, not 1−recall (sweep-1 confound fix); the adaptive guard is
-> **OFF** in confidence mode. Frontier arm range is Kiet's call ({8,12,16} vs {8,16,24,32}).
+> **OFF** in confidence mode. Frontier arm range = **{8,16,24,32}** (LOCKED — maps the l1-recovery-vs-FLOPs frontier).
 
 **Status:** DRAFT / pre-registered. **DO NOT LAUNCH** until reactive 3-seed baseline
 lands (~06:30 UTC 2026-07-07). Supersedes the floor mechanism of CARD-PB v1

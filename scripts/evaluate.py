@@ -104,9 +104,17 @@ def main():
     print(f"average-case   : {metrics['avg_robust_acc']:.4f}")
     print(f"WORST-UNION    : {metrics['worst_union_acc']:.4f}   <-- primary metric")
 
-    out = args.out or os.path.join(
-        "results", f"eval_{os.path.splitext(os.path.basename(args.checkpoint))[0]}.json"
-    )
+    if args.out:
+        out = args.out
+    else:
+        # Default into the per-run layout: results/<run>/s<seed>/eval[_fullAA].json
+        # (screening APGD -> eval.json; full AutoAttack -> eval_fullAA.json). Explicit
+        # --out still wins (e.g. flat RAMP-reference evals).
+        from robustdro.utils.io import run_paths as _rp
+        _rn = args.run_name or re.sub(r"_(best|last|ep\d+)$", "",
+                                      os.path.splitext(os.path.basename(args.checkpoint))[0])
+        _p = _rp({"run_name": _rn, "seed": args.seed, "results_dir": "results/"})
+        out = _p["eval_fullAA"] if args.version == "standard" else _p["eval"]
     # Training protocol recorded FROM THE CHECKPOINT'S OWN cfg (if present), so
     # the views can auto-flag a train/eval eps MISMATCH (e.g. a 0.03-trained ckpt
     # evaluated at 8/255 is a lower bound, not a paper number). None for external

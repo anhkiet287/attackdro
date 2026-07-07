@@ -192,16 +192,16 @@
 <body>
   <header>
     <h1>AttackDRO Dashboard</h1>
-    <p>Regenerated from <code>docs/PROJECT_STATE.md</code> and <code>results/*.json</code> (+ <code>run_status.json</code>) at 2026-07-07 10:57 UTC.</p>
+    <p>Regenerated from <code>docs/PROJECT_STATE.md</code> and <code>results/*.json</code> (+ <code>run_status.json</code>) at 2026-07-07 11:43 UTC.</p>
   </header>
   <main>
     <div class="status"><p><strong>Phase:</strong> recipe RESET applied; single-recipe (RAMP) two-phase plan written; <strong>launch nothing — awaiting GO.</strong> Branch <code>card-pb-fixes</code>.</p>
 <ul>
-<li>[Kiet] <strong>GO on the new plan</strong> (<code>docs/EXPERIMENT_TABLE.md</code>): PHASE-1 develop @ep50 1-seed → PHASE-2 winner @ep80 3-seed.</li>
-<li>[Kiet] <strong>Decide v2 frontier arm range</strong> — pre-reg {8,12,16} (likely clean l1-short null) vs <strong>extended {8,16,24,32}</strong> (maps l1-recovery-vs-FLOPs frontier). Claude leans extended.</li>
-<li>[Kiet/<strong>P-02</strong>] <strong>λ UNRESOLVED</strong> — our RAMP re-run used λ=5; paper cites *from-scratch* λ=2. Our 42.9 matches RAMP Table-5, but Table-5 is a *fine-tuning* number (≠ from-scratch) → the match may be coincidence, <strong>not</strong> validation. Verify the from-scratch λ before citing RAMP / asserting recipe-match validity.</li>
-<li>[CC] <strong>Before any launch (blockers):</strong> trainer <strong>save_freq</strong> (every-10 ckpts for epoch curves) + <strong>resume</strong> (optimizer/epoch/RNG, for PHASE-2 continuation). Verify l1 training strength at step_size 0.10/10-steps.</li>
-<li>[CC] RAMP epoch curve running (tmux <code>rampcurve</code>) → <code>results/ramp_epoch_curve.md</code> (reference, kept).</li>
+<li>[Kiet] <strong>GO on the new plan</strong> (<code>docs/EXPERIMENT_TABLE.md</code>): PHASE-1 develop @ep50 1-seed → PHASE-2 winner @ep80 3-seed. <strong>Infra ready — this is the only remaining gate before Phase-1.</strong></li>
+<li>[Kiet ✓] <strong>v2 frontier arm range = {8, 16, 24, 32}</strong> (LOCKED) — maps the l1-recovery-vs-FLOPs frontier: (a) l1 recovers at FLOPs≤0.60 → conditional efficiency win; (b) recovers only &gt;0.60 → characterized &quot;l1 predictability floors efficiency at ~X%&quot; (the curve IS the result).</li>
+<li>[<strong>P-02 ✓ RESOLVED</strong>] <strong>λ=5 IS RAMP&#x27;s canonical from-scratch RN-18 value</strong> — their own <code>scripts/cifar10/RAMP_scratch_cifar10.sh</code> runs <code>--lbd 5 --fname RAMP_beta_0.5_lbd_5</code> (exactly our model family); paper&#x27;s λ=2 is the WideResNet/TRADES variant (<code>--lbd 2</code> only on the WRN line). Our re-run is recipe-matched <strong>by construction</strong>; no λ=2 re-run needed.</li>
+<li>[CC ✓] <strong>Blockers DONE + verified:</strong> <code>save_freq</code> (every-10 ckpts) + <code>resume</code> (model+optimizer+scheduler+epoch+RNG) — <strong>continuity check PASS</strong> (<code>scripts/dev/resume_continuity_check.py</code>: resumed run reproduces the uninterrupted lr schedule incl. the drop, epoch seq 0..N). Per-run results layout live (<code>results/&lt;run&gt;/s&lt;seed&gt;/{train,eval,eval_fullAA}.json + ckpt/ + run_meta.json</code>).</li>
+<li>[CC ✓] <strong>l1 EVAL convergence CLOSED:</strong> RAMP ep80 l1 APGD-100 = APGD-200 = 46.8 (Δ0.00pp) → screening eval l1@100 is converged / F1-safe, no raise needed. <strong>Still verify on first reactive run:</strong> l1 TRAINING step_size 0.10 / 10-step strength (training, not eval).</li>
 <li>[Kiet/Colab] avg_frozen + 3a @our-recipe = <strong>SUPERSEDED</strong> (stopping); archive JSONs if they land.</li>
 </ul></div>
     <section>
@@ -216,6 +216,17 @@
     <section>
       <h2>Results</h2>
       <div class="table-wrap"><table><thead><tr><th>Run</th><th>Clean</th><th>linf</th><th>l2</th><th>l1</th><th>Union</th><th>Tier</th><th>eps</th><th>Flag</th><th>n</th><th>Version</th><th>Source</th></tr></thead><tbody><tr><td>baseline:MSD</td><td>82.1</td><td>44.6</td><td>64.5</td><td>46.7</td><td><strong>42.5</strong></td><td>official</td><td>0.03</td><td></td><td>1000</td><td>apgd</td><td><code>baseline_table.json</code></td></tr><tr><td>baseline:AVG</td><td>84.6</td><td>40.7</td><td>65.5</td><td>47.7</td><td><strong>38.7</strong></td><td>official</td><td>0.03</td><td></td><td>1000</td><td>apgd</td><td><code>baseline_table.json</code></td></tr><tr><td>baseline:MAX</td><td>81.7</td><td>39.2</td><td>62.1</td><td>26.2</td><td><strong>25.0</strong></td><td>official</td><td>0.03</td><td></td><td>1000</td><td>apgd</td><td><code>baseline_table.json</code></td></tr><tr><td>baseline:L2</td><td>90.7</td><td>22.7</td><td>63.1</td><td>21.1</td><td><strong>17.5</strong></td><td>official</td><td>0.03</td><td></td><td>1000</td><td>apgd</td><td><code>baseline_table.json</code></td></tr><tr><td>baseline:LINF</td><td>83.9</td><td>47.7</td><td>57.7</td><td>7.0</td><td><strong>7.0</strong></td><td>official</td><td>0.03</td><td></td><td>1000</td><td>apgd</td><td><code>baseline_table.json</code></td></tr><tr><td>baseline:L1</td><td>73.7</td><td>0.0</td><td>0.1</td><td>0.0</td><td><strong>0.0</strong></td><td>official</td><td>0.03</td><td></td><td>1000</td><td>apgd</td><td><code>baseline_table.json</code></td></tr></tbody></table></div>
+    </section>
+    <section>
+      <h2>RAMP epoch curve (reference)</h2>
+      <h1>RAMP union-vs-epoch curve @8/255 (n=1000, APGD, restarts=1)</h1>
+<p>Quantifies the RECIPE (training-length) contribution to RAMP&#x27;s headline. Same eval as the 46.1 comparator and our in-house rows. Our reactive (soft T=0.25) @50ep = <strong>41.90</strong>.</p>
+<div class="table-wrap"><table><thead><tr><th>RAMP epoch</th><th>union</th><th>clean</th><th>linf</th><th>l2</th><th>l1</th></tr></thead><tbody><tr><td>10</td><td><strong>33.3</strong></td><td>62.5</td><td>34.1</td><td>49.3</td><td>37.9</td></tr><tr><td>20</td><td><strong>40.7</strong></td><td>70.3</td><td>41.6</td><td>55.7</td><td>43.6</td></tr><tr><td>30</td><td><strong>42.4</strong></td><td>72.7</td><td>43.4</td><td>57.2</td><td>46.4</td></tr><tr><td>40</td><td><strong>43.6</strong></td><td>74.5</td><td>44.7</td><td>61.1</td><td>46.4</td></tr><tr><td>50</td><td><strong>42.9</strong></td><td>77.5</td><td>43.9</td><td>61.9</td><td>47.1</td></tr><tr><td>60</td><td><strong>43.6</strong></td><td>75.7</td><td>45.0</td><td>60.9</td><td>46.9</td></tr><tr><td>70</td><td><strong>43.1</strong></td><td>78.3</td><td>43.5</td><td>64.3</td><td>47.7</td></tr><tr><td>80</td><td><strong>46.0</strong></td><td>81.2</td><td>47.3</td><td>65.8</td><td>49.6</td></tr></tbody></table></div>
+<ul>
+<li><strong>Recipe (epoch) contribution:</strong> RAMP@80 46.0 − RAMP@50 42.9 = <strong>+3.1pp</strong> from training 50→80 epochs alone.</li>
+<li><strong>Matched-budget gap:</strong> RAMP@50 42.9 − our reactive@50 41.9 = <strong>+1.0pp</strong> (method+recipe-details at equal epochs).</li>
+<li>So most of the headline RAMP−ours gap (+4.1pp) is <strong>training length</strong>, not the method — the F7 recipe-confound, quantified.</li>
+</ul>
     </section>
     <div class="grid">
       <section>
@@ -241,11 +252,11 @@
         <h2>Open Decisions</h2>
         <p><strong>Phase:</strong> recipe RESET applied; single-recipe (RAMP) two-phase plan written; <strong>launch nothing — awaiting GO.</strong> Branch <code>card-pb-fixes</code>.</p>
 <ul>
-<li>[Kiet] <strong>GO on the new plan</strong> (<code>docs/EXPERIMENT_TABLE.md</code>): PHASE-1 develop @ep50 1-seed → PHASE-2 winner @ep80 3-seed.</li>
-<li>[Kiet] <strong>Decide v2 frontier arm range</strong> — pre-reg {8,12,16} (likely clean l1-short null) vs <strong>extended {8,16,24,32}</strong> (maps l1-recovery-vs-FLOPs frontier). Claude leans extended.</li>
-<li>[Kiet/<strong>P-02</strong>] <strong>λ UNRESOLVED</strong> — our RAMP re-run used λ=5; paper cites *from-scratch* λ=2. Our 42.9 matches RAMP Table-5, but Table-5 is a *fine-tuning* number (≠ from-scratch) → the match may be coincidence, <strong>not</strong> validation. Verify the from-scratch λ before citing RAMP / asserting recipe-match validity.</li>
-<li>[CC] <strong>Before any launch (blockers):</strong> trainer <strong>save_freq</strong> (every-10 ckpts for epoch curves) + <strong>resume</strong> (optimizer/epoch/RNG, for PHASE-2 continuation). Verify l1 training strength at step_size 0.10/10-steps.</li>
-<li>[CC] RAMP epoch curve running (tmux <code>rampcurve</code>) → <code>results/ramp_epoch_curve.md</code> (reference, kept).</li>
+<li>[Kiet] <strong>GO on the new plan</strong> (<code>docs/EXPERIMENT_TABLE.md</code>): PHASE-1 develop @ep50 1-seed → PHASE-2 winner @ep80 3-seed. <strong>Infra ready — this is the only remaining gate before Phase-1.</strong></li>
+<li>[Kiet ✓] <strong>v2 frontier arm range = {8, 16, 24, 32}</strong> (LOCKED) — maps the l1-recovery-vs-FLOPs frontier: (a) l1 recovers at FLOPs≤0.60 → conditional efficiency win; (b) recovers only &gt;0.60 → characterized &quot;l1 predictability floors efficiency at ~X%&quot; (the curve IS the result).</li>
+<li>[<strong>P-02 ✓ RESOLVED</strong>] <strong>λ=5 IS RAMP&#x27;s canonical from-scratch RN-18 value</strong> — their own <code>scripts/cifar10/RAMP_scratch_cifar10.sh</code> runs <code>--lbd 5 --fname RAMP_beta_0.5_lbd_5</code> (exactly our model family); paper&#x27;s λ=2 is the WideResNet/TRADES variant (<code>--lbd 2</code> only on the WRN line). Our re-run is recipe-matched <strong>by construction</strong>; no λ=2 re-run needed.</li>
+<li>[CC ✓] <strong>Blockers DONE + verified:</strong> <code>save_freq</code> (every-10 ckpts) + <code>resume</code> (model+optimizer+scheduler+epoch+RNG) — <strong>continuity check PASS</strong> (<code>scripts/dev/resume_continuity_check.py</code>: resumed run reproduces the uninterrupted lr schedule incl. the drop, epoch seq 0..N). Per-run results layout live (<code>results/&lt;run&gt;/s&lt;seed&gt;/{train,eval,eval_fullAA}.json + ckpt/ + run_meta.json</code>).</li>
+<li>[CC ✓] <strong>l1 EVAL convergence CLOSED:</strong> RAMP ep80 l1 APGD-100 = APGD-200 = 46.8 (Δ0.00pp) → screening eval l1@100 is converged / F1-safe, no raise needed. <strong>Still verify on first reactive run:</strong> l1 TRAINING step_size 0.10 / 10-step strength (training, not eval).</li>
 <li>[Kiet/Colab] avg_frozen + 3a @our-recipe = <strong>SUPERSEDED</strong> (stopping); archive JSONs if they land.</li>
 </ul>
       </section>

@@ -16,6 +16,7 @@ train:
   weight_decay: 0.0005
   lr_schedule: multistep
   milestones: [25, 40]          # for 50 epochs (~50%, 80%)
+  save_freq: 10                 # checkpoint every N epochs -> ckpt/ep010.pt.. (epoch curves + PHASE-2 continuation)
 
   groupdro:
     eta_q: 0.02                 # q learning rate (log-space multiplicative update)

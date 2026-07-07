@@ -22,7 +22,7 @@ from ..attacks.norms import msd_v0
 from ..attacks.sources import build_source_attack
 from ..data import build_loaders
 from ..models import build_model
-from ..utils.io import save_json
+from ..utils.io import save_json, run_paths, write_run_meta
 from ..utils.wandb_log import WandbLogger
 from .losses import GroupDRO
 
@@ -162,8 +162,18 @@ class GroupDROTrainer:
 
         self.criterion = nn.CrossEntropyLoss()
         self.logger = WandbLogger(cfg, run_name=cfg.get("run_name"))
-        self.ckpt_dir = cfg.get("checkpoints_dir", "checkpoints/")
+        # Per-run results layout: results/<run>/s<seed>/{train,smoke}.json + ckpt/ .
+        # Root = cfg.results_dir (default results/; Colab overrides to Drive). Checkpoints
+        # nest under the run (checkpoints_dir is no longer used).
+        self.paths = run_paths(cfg)
+        self.ckpt_dir = self.paths["ckpt_dir"]
         self.results_dir = cfg.get("results_dir", "results/")
+        self.is_smoke = str(cfg.get("run_name", "")).endswith("_smoke")
+        self.save_freq = int(tcfg.get("save_freq", 0))   # >0 => checkpoint every N epochs (curves)
+        self.start_epoch = 0
+        _resume = tcfg.get("resume")                     # ckpt path, or "auto" (=<ckpt_dir>/last.pt)
+        if _resume:
+            self._resume_from(_resume)
         self.probe_steps = tcfg.get("eval_pgd_steps", 20)
         self.probe_batches = tcfg.get("eval_probe_batches", 8)  # cheap subset
         self.best_union = -1.0
@@ -594,11 +604,56 @@ class GroupDROTrainer:
         return out
 
     def save_checkpoint(self, tag: str, extra=None) -> str:
+        """Resume-capable checkpoint into results/<run>/s<seed>/ckpt/<tag>.pt — carries
+        optimizer + scheduler + epoch + RNG so PHASE-2 can continue the winner on the same
+        trajectory (item 1)."""
+        import numpy as _np
+        import random as _rnd
         os.makedirs(self.ckpt_dir, exist_ok=True)
-        path = os.path.join(self.ckpt_dir, f"{self.cfg.get('run_name', 'run')}_{tag}.pt")
+        path = os.path.join(self.ckpt_dir, f"{tag}.pt")
+        rng = {"torch": torch.get_rng_state(),
+               "cuda": (torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None),
+               "numpy": _np.random.get_state(), "python": _rnd.getstate()}
         torch.save({"model": self.model.state_dict(), "cfg": self.cfg,
-                    "dro": self.dro.state_dict(), **(extra or {})}, path)
+                    "dro": self.dro.state_dict(),
+                    "optimizer": self.optimizer.state_dict(),
+                    "scheduler": (self.scheduler.state_dict() if self.scheduler is not None else None),
+                    "rng": rng, **(extra or {})}, path)
         return path
+
+    def _resume_from(self, resume) -> None:
+        """Restore model + optimizer + scheduler + epoch + RNG for a valid continuation
+        (item 1). resume='auto' -> <ckpt_dir>/last.pt. Missing ckpt -> start fresh."""
+        path = os.path.join(self.ckpt_dir, "last.pt") if resume == "auto" else resume
+        if not os.path.exists(path):
+            print(f"[resume] no checkpoint at {path}; starting fresh")
+            return
+        ck = torch.load(path, map_location=self.device, weights_only=False)
+        self.model.load_state_dict(ck["model"])
+        if ck.get("optimizer"):
+            self.optimizer.load_state_dict(ck["optimizer"])
+        if self.scheduler is not None and ck.get("scheduler"):
+            self.scheduler.load_state_dict(ck["scheduler"])
+        if "dro" in ck:
+            try:
+                self.dro.load_state_dict(ck["dro"])
+            except Exception:
+                pass
+        self.start_epoch = int(ck.get("epoch", -1)) + 1
+        rng = ck.get("rng")
+        if rng:
+            try:
+                import numpy as _np
+                import random as _rnd
+                torch.set_rng_state(rng["torch"].to("cpu", torch.uint8))   # map_location may move it to CUDA
+                if rng.get("cuda") is not None and torch.cuda.is_available():
+                    torch.cuda.set_rng_state_all([s.to("cpu", torch.uint8) for s in rng["cuda"]])
+                _np.random.set_state(rng["numpy"])
+                _rnd.setstate(rng["python"])
+            except Exception as e:
+                print(f"[resume] RNG restore partial ({e})")
+        print(f"[resume] {path} -> start_epoch={self.start_epoch} "
+              f"lr={self.optimizer.param_groups[0]['lr']:.5f}")
 
     def _pb_adaptive_floor(self, ev: dict) -> None:
         """Safety-valve: if any norm's probe robust acc falls > pb_guard_pp below its
@@ -620,7 +675,17 @@ class GroupDROTrainer:
                           f"-> floor = {self._floor_steps(g)} steps")
 
     def fit(self, max_steps_per_epoch=None, **_) -> dict:
+        # On resume, continue the epoch curve from the existing train.json (item 1).
         history = []
+        if self.start_epoch > 0 and os.path.exists(self.paths["train"]):
+            try:
+                from ..utils.io import load_json as _lj
+                history = _lj(self.paths["train"]).get("history", [])
+            except Exception:
+                history = []
+        if not self.is_smoke:
+            write_run_meta(self.cfg, self.paths,
+                           extra={"resumed_from_epoch": self.start_epoch or None})
         # Provenance: the eps this model is TRAINED at + whether that differs from
         # the canonical eval protocol (8/255). Logged once as run summary so every
         # row in the W&B table self-declares train==eval vs a mismatch (a 0.03-ckpt
@@ -632,7 +697,7 @@ class GroupDROTrainer:
             "train/eps_inf": _eps_inf,
             "train/eps_mismatch": int(_mismatch),
         })
-        for epoch in range(self.epochs):
+        for epoch in range(self.start_epoch, self.epochs):
             tr = self.train_epoch(epoch, max_steps=max_steps_per_epoch)
             ev = self.evaluate()
             if self.objective == "predictive_binding":
@@ -656,20 +721,29 @@ class GroupDROTrainer:
             self.logger.log(metrics, step=epoch)
             history.append(metrics)
             # Per-sample loss-matrix dump (first batch of the epoch), ~1.5 KB each.
-            if getattr(self, "_first_batch_L", None) is not None:
-                d = os.path.join(self.results_dir, "loss_mats", self.cfg.get("run_name", "run"))
+            if getattr(self, "_first_batch_L", None) is not None and not self.is_smoke:
+                d = os.path.join(self.paths["seed_dir"], "loss_mats")
                 os.makedirs(d, exist_ok=True)
                 torch.save({"epoch": epoch, "norms": self.group_norms,
                             "L": self._first_batch_L}, os.path.join(d, f"ep{epoch:03d}.pt"))
 
-            if ev["probe/worst_union"] > self.best_union:
+            if not self.is_smoke and ev["probe/worst_union"] > self.best_union:
                 self.best_union = ev["probe/worst_union"]
                 self.save_checkpoint("best", {"epoch": epoch, **ev})
+            # save_freq: periodic checkpoints (ep010.pt ... ep080.pt) for epoch curves +
+            # PHASE-2 continuation from a fixed epoch (item 1). 1-indexed to match RAMP.
+            if (not self.is_smoke and self.save_freq
+                    and (epoch + 1) % self.save_freq == 0):
+                self.save_checkpoint(f"ep{epoch + 1:03d}", {"epoch": epoch})
+            # Incrementally persist the curve so a disconnect keeps completed epochs.
+            if not self.is_smoke:
+                save_json({"cfg": self.cfg, "history": history,
+                           "best_probe_worst_union": self.best_union}, self.paths["train"])
 
-        self.save_checkpoint("last", {"epoch": self.epochs - 1})
+        if not self.is_smoke:
+            self.save_checkpoint("last", {"epoch": self.epochs - 1})
         self.logger.summary({"best/probe_worst_union": self.best_union})
-        os.makedirs(self.results_dir, exist_ok=True)
-        out = os.path.join(self.results_dir, f"{self.cfg.get('run_name', 'run')}.json")
+        out = self.paths["smoke"] if self.is_smoke else self.paths["train"]
         save_json({"cfg": self.cfg, "history": history,
                    "best_probe_worst_union": self.best_union}, out)
         self.logger.finish()
