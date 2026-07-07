@@ -23,7 +23,7 @@ import traceback
 from pathlib import Path
 
 # Repo root = parent of scripts/. Run from anywhere.
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 
 # --- pretty output -----------------------------------------------------------
 _USE_COLOR = sys.stdout.isatty()

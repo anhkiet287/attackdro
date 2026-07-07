@@ -1,0 +1,14 @@
+# =============================================================================
+# msd_inhouse.yaml — CARD-7: MSD objective under OUR recipe/protocol.
+# Faithful msd_v0 port from locuslab/robust_union (cifar_funcs.py, commit
+# ef3419493188e2560b57fab87bdbf42ce8c0287e), their defaults (steps=50, alphas
+# .003/.05/.05); everything else = our recipe (epochs, LR, batch, protocol eps,
+# eval harness). Tier-1 recipe-controlled MSD row.
+# =============================================================================
+_base_: configs/attackdro.yaml
+method: attackdro
+run_name: msd_inhouse
+train:
+  groupdro:
+    objective: msd
+    msd_steps: 50

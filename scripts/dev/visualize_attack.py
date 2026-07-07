@@ -37,7 +37,7 @@ import torch
 import torchvision
 import torchvision.transforms as T
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from robustdro.attacks import pgd_linf            # noqa: E402
 from robustdro.models import build_model           # noqa: E402

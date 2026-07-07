@@ -72,11 +72,12 @@ def main():
 
     smoke_kwargs = {}
     if args.smoke:
-        cfg["train"]["epochs"] = 1
+        cfg["train"]["epochs"] = args.epochs or 1
         cfg["wandb"]["mode"] = args.wandb_mode or "offline"
         cfg["run_name"] = (cfg.get("run_name") or "run") + "_smoke"
         smoke_kwargs = {"max_steps_per_epoch": 2, "eval_max_batches": 2}
-        print("[smoke] 1 epoch, 2 train steps, 2 eval batches, wandb offline")
+        print(f"[smoke] {cfg['train']['epochs']} epoch(s), 2 train steps, "
+              "2 eval batches, wandb offline unless overridden")
 
     set_seed(cfg["seed"])
     method = cfg.get("method", "pgd_at")

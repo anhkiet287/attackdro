@@ -1,79 +1,32 @@
-# AttackDRO
+# AttackDRO++ — worst-case robustness over the union of (ℓ∞, ℓ2, ℓ1)
 
-Research code for the **AttackDRO** project. Training runs on a Windows PC with an **RTX 5070 Ti**
-(Blackwell, `sm_120`) inside **WSL2 Ubuntu**, accessed remotely from a **MacBook Pro M4**
-over **Tailscale + SSH**.
+Difficulty-aware weighting for **worst-case union adversarial robustness** on
+CIFAR-10 / PreActResNet-18. A sample counts robust only if it survives APGD in
+**every** norm (per-sample AND). Locked protocol: ε = (ℓ∞ 0.03, ℓ2 0.5, ℓ1 12),
+train == eval; see [`configs/base.yaml`](configs/base.yaml).
 
-## Architecture
-
-```
-MacBook Pro M4  ──Tailscale (encrypted, from anywhere)──►  Windows PC
-   │                                                            │
-   └─ VS Code Remote-SSH ──────────────► sshd inside WSL2 (Ubuntu)
-                                              │
-                                              └─ PyTorch + CUDA 12.8 → RTX 5070 Ti
-```
-
-The Mac is a thin client: you edit and launch runs from it, but all training executes
-on the PC's GPU.
-
-## First-time setup
-
-See **[SETUP.md](SETUP.md)** for the full step-by-step (Tailscale, WSL2, NVIDIA driver,
-PyTorch, VS Code Remote-SSH).
-
-## Quick start (after setup)
+**Project state:** read [`PLAYBOOK.md`](PLAYBOOK.md) →
+[`docs/MEMORY.md`](docs/MEMORY.md) → tail of [`docs/LOG.md`](docs/LOG.md), in
+that order. The local dashboard is [`docs/dashboard.html`](docs/dashboard.html),
+regenerated from `docs/MEMORY.md`, `docs/LOG.md`, and `results/*.json` by:
 
 ```bash
-# From the Mac: VS Code → Remote-SSH → connect to the PC, OR plain ssh:
-ssh kiet@attackdro-pc        # Tailscale hostname
-
-# On the PC (inside WSL2), one time:
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-# install PyTorch separately — see SETUP.md (cu128 build)
-
-# Sanity check the GPU is visible to PyTorch:
-python scripts/check_gpu.py
-
-# Train:
-python src/train.py --config configs/default.yaml
+.venv/bin/python scripts/make_dashboard.py
 ```
 
 ## Layout
+- `src/robustdro/` — attacks (`norms.py`), eval (`eval_union.py` + AutoAttack), training (`groupdro.py`), models.
+- `scripts/` — `train.py`, `evaluate.py`, `eval_standard_pack.py`, `validate_baseline.py`, `make_experiment_table.py`, `figures/make_all.py`, `run_final_pipeline.sh`. Dev/diagnostic tools in `scripts/dev/`.
+- `configs/` — `base.yaml` + one file per paper method. `docs/` — compact memory/log/dashboard plus `archive/`. `external/` — RAMP + robust_union checkouts (baselines).
 
-```
-AttackDRO/
-├── README.md
-├── SETUP.md            # remote-GPU setup guide
-├── requirements.txt    # deps (PyTorch installed separately, see SETUP.md)
-├── .gitignore
-├── configs/
-│   └── default.yaml    # training hyperparameters
-├── src/
-│   └── train.py        # minimal PyTorch training loop (proves the GPU works)
-├── scripts/
-│   ├── check_gpu.py    # CUDA / device sanity check
-│   ├── setup_pc.ps1    # PC setup stage 1 (WSL2 + Ubuntu, driver check)
-│   └── setup_wsl.sh    # PC setup stage 2 (env, PyTorch, SSH, Tailscale)
-├── jobs/               # Mac→PC job-dispatch queue (see jobs/README.md)
-│   ├── agent.py        # watcher: runs on the PC, executes queued jobs on the GPU
-│   ├── submit.py       # submit a job (from the Mac)
-│   └── sync.sh         # rsync the queue/results over Tailscale
-├── MACBOOK_PROMPT.md   # paste into Claude on the Mac to set up the client side
-├── data/               # datasets (git-ignored)
-└── notebooks/          # exploration (git-ignored outputs)
-```
-
-## Remote job dispatch (Mac → PC GPU)
-
-Once set up, submit training runs from the Mac and let the PC's GPU execute them:
-
+## Reproduce one number end-to-end (MSD baseline, worst-∪ = 42.5)
 ```bash
-python jobs/submit.py --name exp1 -- python src/train.py --config configs/default.yaml
-bash jobs/sync.sh              # push the job to the PC, pull back results
-cat jobs/logs/<id>.log
+python -m venv .venv && source .venv/bin/activate      # PyTorch cu128, see SETUP.md
+pip install -r requirements.txt
+python scripts/evaluate.py \
+  --config configs/base.yaml \
+  --checkpoint external/robust_union/CIFAR10/Selected/MSD.pt \
+  -n 1000 --version apgd --out results/eval_msd_check.json
+# -> metrics.worst_union_acc ≈ 0.425  (tier-2 row in EXPERIMENT_TABLE.md)
 ```
-
-See **[jobs/README.md](jobs/README.md)**. The PC runs `python jobs/agent.py` in the
-background to watch the queue.
+Setup (WSL2 + GPU): [`SETUP.md`](SETUP.md). Operating rules start at [`PLAYBOOK.md`](PLAYBOOK.md).
