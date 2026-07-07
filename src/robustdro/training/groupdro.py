@@ -131,9 +131,18 @@ class GroupDROTrainer:
             self.pb_cold_epochs = int(gcfg.get("pb_cold_epochs", 5))
             self.pb_recal_every = int(gcfg.get("pb_recal_every", 0))  # >0 => full-reactive epoch every N
             self.pb_guard_pp = float(gcfg.get("pb_guard_pp", 3.0))
+            # CARD-PB v2 (Option B): predictability-aware floor. In "confidence" mode the
+            # per-norm floor is floor_g = clamp(k_min + round(kspan*miss_ema_g), k_min,
+            # full_g), miss_g = 1 - recall_g measured UNBIASED on the recal subset (NOT the
+            # probe — the l1 probe is the weakest attack, F1). "fixed" = the v1 constant.
+            self.pb_floor_mode = gcfg.get("pb_floor_mode", "fixed")   # fixed | confidence
+            self.pb_floor_kspan = int(gcfg.get("pb_floor_kspan", 12))
+            self.pb_floor_ema = float(gcfg.get("pb_floor_ema", 0.5))  # smooth the ~12-sample/batch miss (R5)
             self._full_steps = [int(s.get("steps", 10)) for s in self.attack_specs]
-            self._pb_extra_floor = [0 for _ in self.attack_specs]   # adaptive floor bumps (steps)
-            # R1: floor attacks are (re)built from pb_k_floor + _pb_extra_floor so a
+            self._pb_extra_floor = [0 for _ in self.attack_specs]   # adaptive-guard bumps, ON TOP of the base floor
+            self._pb_conf_floor = [self.pb_k_floor for _ in self.attack_specs]  # confidence base (>= k_min)
+            self._pb_miss_ema = [None for _ in self.attack_specs]   # per-norm 1-recall EMA
+            # R1: floor attacks are (re)built from the CURRENT effective step count so a
             # raised floor runs MORE steps, not just logs a higher number.
             self.floor_attacks = [None] * len(self.attack_specs)
             for _g in range(len(self.attack_specs)):
@@ -161,15 +170,39 @@ class GroupDROTrainer:
               f"norm_losses={self.normalize_losses}")
 
     # ------------------------- CARD-PB predictive-binding ----------------- #
+    def _floor_steps(self, g: int) -> int:
+        """Effective floor steps for norm g = base (confidence floor in v2, else k_min)
+        + adaptive-guard bump, capped at that norm's full attack. SINGLE source of truth
+        for the actual attack (R1), the FLOPs count, and the logged floor."""
+        base = self._pb_conf_floor[g] if self.pb_floor_mode == "confidence" else self.pb_k_floor
+        return int(min(base + self._pb_extra_floor[g], self._full_steps[g]))
+
     def _rebuild_floor(self, g: int) -> None:
-        """(Re)build norm g's floor attack so it runs pb_k_floor + _pb_extra_floor[g]
-        steps. R1 fix: the safety/confidence floor must change the ACTUAL attack, not
-        just the logged step count and FLOPs counter — otherwise a 'raised' floor never
-        attacks any harder and the guarantee is vacuous. Called at init and whenever the
-        floor step count changes (adaptive guard, or v2 confidence floor)."""
-        spec = {**self.attack_specs[g], "steps": self.pb_k_floor + self._pb_extra_floor[g]}
+        """(Re)build norm g's floor attack so it runs _floor_steps(g) steps. R1 fix: the
+        floor must change the ACTUAL attack, not just the logged step count — otherwise a
+        'raised' floor never attacks harder and the guarantee is vacuous. Called at init
+        and whenever the floor changes (confidence recompute or adaptive guard)."""
+        spec = {**self.attack_specs[g], "steps": max(1, self._floor_steps(g))}
         self.floor_attacks[g] = build_source_attack(
             spec, eps=self.cfg["threat_model"][spec["norm"].lower()]["eps"])
+
+    def _recompute_conf_floor(self) -> None:
+        """v2 Option B: set each norm's confidence floor from its measured miss rate
+        (1 - recall on the recal subset): floor_g = clamp(k_min + round(kspan*miss_ema_g),
+        k_min, full_g). Norms φ predicts poorly (l1) get a higher floor automatically;
+        norms it nails (linf) or that few samples bind (l2) stay near k_min. Rebuilds the
+        floor attack so the change is physical (R1). No-op outside confidence mode."""
+        if self.pb_floor_mode != "confidence":
+            return
+        for g in range(len(self.attack_specs)):
+            m = self._pb_miss_ema[g]
+            if m is None:
+                continue
+            cf = self.pb_k_floor + int(round(self.pb_floor_kspan * m))
+            cf = max(self.pb_k_floor, min(cf, self._full_steps[g]))
+            if cf != self._pb_conf_floor[g]:
+                self._pb_conf_floor[g] = cf
+                self._rebuild_floor(g)
 
     def _pb_wrap_train_loader(self) -> None:
         """Rebuild the train loader to yield (x, y, idx) so φ can keep a per-sample
@@ -224,7 +257,7 @@ class GroupDROTrainer:
                 attack_passes += int(full_m.sum()) * self._full_steps[g]
             if floor_m.any():
                 xg[floor_m] = atk_floor(self.model, x[floor_m], y[floor_m])
-                attack_passes += int(floor_m.sum()) * (self.pb_k_floor + self._pb_extra_floor[g])
+                attack_passes += int(floor_m.sum()) * self._floor_steps(g)
             self.model.train()
             logits = self.model(xg)                      # train-mode forward (BN)
             per_sample.append(nn.functional.cross_entropy(logits, y, reduction="none"))
@@ -252,11 +285,18 @@ class GroupDROTrainer:
         self.pb_Lbar[idx] = torch.where(full_mask, updated, Lbar_b)
         self.pb_seen[idx] = True
 
-        # Misprediction rate p on the recalibration subset (unbiased: full in all norms).
+        # Misprediction on the recalibration subset (unbiased: full in all norms). Aggregate
+        # rate p AND per-norm miss = 1 - recall_g = P(b_hat != g | true == g), which drives
+        # the v2 confidence floor (norms φ misses most get more floor).
         if recal.any():
             true_bind = newL[recal].argmax(dim=1)
-            self._pb_mis_num += int((true_bind != b_hat[recal]).sum())
+            bh = b_hat[recal]
+            self._pb_mis_num += int((true_bind != bh).sum())
             self._pb_mis_den += int(recal.sum())
+            for g in range(G):
+                is_g = (true_bind == g)
+                self._pb_missd[g] += int(is_g.sum())
+                self._pb_missn[g] += int((is_g & (bh != g)).sum())
         # MEASURED FLOPs: attack forward+backward passes from the REAL partitions, vs
         # the reactive-equivalent (all norms full every step).
         self._pb_attack_passes += attack_passes
@@ -276,6 +316,8 @@ class GroupDROTrainer:
         do_update = epoch >= self.warmup_epochs
         self._pb_attack_passes = self._pb_reactive_passes = 0
         self._pb_mis_num = self._pb_mis_den = 0
+        self._pb_missn = [0 for _ in range(self.num_groups)]
+        self._pb_missd = [0 for _ in range(self.num_groups)]
         for i, batch in enumerate(self.train_loader):
             if max_steps is not None and i >= max_steps:
                 break
@@ -398,8 +440,19 @@ class GroupDROTrainer:
             if self._pb_mis_den:
                 metrics["phi/misprediction_rate"] = self._pb_mis_num / self._pb_mis_den
             metrics["pb/beta"] = self.pb_beta        # EMA horizon (comparability across β-ablation)
+            metrics["pb/floor_mode"] = self.pb_floor_mode
+            metrics["pb/floor_kspan"] = self.pb_floor_kspan
             for g, norm in enumerate(self.group_norms):
-                metrics[f"floor/{norm}"] = self.pb_k_floor + self._pb_extra_floor[g]
+                # per-norm miss = 1 - recall on the recal subset; EMA-smoothed (R5). Drives
+                # the v2 confidence floor and makes the FLOPs-vs-l1-recovery story legible.
+                if self._pb_missd[g]:
+                    m = self._pb_missn[g] / self._pb_missd[g]
+                    self._pb_miss_ema[g] = (m if self._pb_miss_ema[g] is None
+                                            else self.pb_floor_ema * m
+                                            + (1 - self.pb_floor_ema) * self._pb_miss_ema[g])
+                if self._pb_miss_ema[g] is not None:
+                    metrics[f"phi/miss_rate_{norm}"] = self._pb_miss_ema[g]
+                metrics[f"floor/{norm}"] = self._floor_steps(g)
         return metrics
 
     def _probe_norm(self, norm: str) -> torch.Tensor:
@@ -554,7 +607,7 @@ class GroupDROTrainer:
                     self._rebuild_floor(g)   # R1: the raised floor now actually attacks more
                     print(f"[cardpb] adaptive floor: {norm} probe {acc:.3f} dropped "
                           f">{self.pb_guard_pp}pp vs max {self._pb_norm_max[g]:.3f} "
-                          f"-> floor = {self.pb_k_floor + bump} steps")
+                          f"-> floor = {self._floor_steps(g)} steps")
 
     def fit(self, max_steps_per_epoch=None, **_) -> dict:
         history = []
@@ -573,7 +626,8 @@ class GroupDROTrainer:
             tr = self.train_epoch(epoch, max_steps=max_steps_per_epoch)
             ev = self.evaluate()
             if self.objective == "predictive_binding":
-                self._pb_adaptive_floor(ev)
+                self._recompute_conf_floor()       # v2: set next epoch's floor from measured miss
+                self._pb_adaptive_floor(ev)         # probe-driven bump on top (secondary safety)
             pb = self._dump_probe_binding(epoch)
             # CARD-3a: set next epoch's q from THIS epoch's per-norm probe robust-acc
             # (binding-aware: weakest norm -> most weight). Epoch 0 trains uniform.

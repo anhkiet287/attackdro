@@ -1,0 +1,27 @@
+# =============================================================================
+# cardpb_v2.yaml — CARD-PB v2: predictability-aware (confidence) safety floor.
+# Inherits cardpb.yaml; the ONE change is the floor mechanism (Option B, Kiet
+# 2026-07-07): the per-norm floor scales with the measured miss rate
+#   floor_g = clamp(k_min + round(kspan * miss_g), k_min, full_g),   miss_g = 1-recall_g
+# measured UNBIASED on the recal subset (NOT the probe — the l1 probe is the
+# weakest attack, F1). So the least-predictable norm (l1, the trait-heavy minority
+# per Gate-α/F9) is protected WITHOUT hand-picking it. Requires the R1 fix (a
+# raised floor now runs more actual steps). Sweep pb_floor_kspan in {8, 12, 16}.
+#
+# Pre-registered v2 success (vs reactive 3-seed baseline union 41.90+/-0.22, l1 48.10):
+#   union within +/-0.3 of 41.90  AND  l1 >= 46.1 (drop <2pp)  AND  attack_flops <= 0.60.
+# Winning arm = LOWEST-FLOPs arm meeting all three; if none => finding
+# "l1 predictability floors the efficiency".
+# =============================================================================
+_base_: configs/cardpb.yaml
+
+run_name: predictive_v2
+
+train:
+  groupdro:
+    pb_floor_mode: confidence   # v2 Option B (vs v1 "fixed")
+    pb_floor_kspan: 12          # floor scale; SWEEP {8,12,16} via --set
+    pb_floor_ema: 0.5           # smooth the ~12-sample/batch recal miss estimate (R5)
+    pb_cold_epochs: 5           # paper regime (cold=1 was stress-test only)
+    # inherited from cardpb.yaml: pb_k_floor=3 (=k_min), pb_guard_pp=3.0 (adaptive floor ON),
+    # pb_beta=0.5, pb_recal_rho=0.1, temperature=0.25, objective=predictive_binding.
