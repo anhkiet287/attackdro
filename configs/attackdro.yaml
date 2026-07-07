@@ -25,10 +25,14 @@ train:
     probe_binding_every: 1
 
   # Union SOURCE attacks (one group each). eps comes from base.threat_model.
+  # RAMP-aligned TRAINING inner-max = uniform 10 steps (RAMP --at_iter 10, paper p8).
+  # Changed 2026-07-07 from 10/10/20 (l1 was 20 steps). Symmetric budget also simplifies
+  # CARD-PB's per-sample allocation (reactive training budget now 30 steps, not 40).
+  # EVAL stays l1-heavy / F1-safe (base.eval_attack) — training uniform-10 != eval uniform.
   attacks:
     - { norm: linf, steps: 10, step_size: 0.00784313725, random_start: true }   # 2/255
     - { norm: l2,   steps: 10, step_size: 0.125,          random_start: true }
-    - { norm: l1,   steps: 20, step_size: 0.05, k: 20, gap: 0.05, random_k: true, random_start: false }
+    - { norm: l1,   steps: 10, step_size: 0.10, k: 20, gap: 0.05, random_k: true, random_start: false }  # was steps 20/step 0.05; step raised to keep l1 reach in 10 steps
 
   # Cheap in-training union probe (NOT final eval — that is eval_union/APGD).
   eval_pgd_steps: 20
