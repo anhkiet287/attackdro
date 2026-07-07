@@ -22,11 +22,11 @@ below before wiring live numbers. Until then this is hand-maintained.)*
 | use | attack | steps (linf/l2/l1) | note |
 |---|---|---|---|
 | **TRAINING inner-max** | PGD (source) | **10 / 10 / 10** | RAMP-matched, uniform |
-| **EVAL — develop/screening** | APGD, n=1000 | **l1 ≥ linf/l2** (never fewer) | fast iteration; l1 must never be shortchanged (our own F1) |
+| **EVAL — develop/screening** | APGD, n=1000 | **20 / 20 / 100** (measured plateaus, P-04) | l1-heavy; = full 100/100/100 exactly, ~53% faster; l1 never shortchanged (F1) |
 | **EVAL — final claim rows** | **full AutoAttack** | CE+T+FAB+Square to convergence | matches RAMP; APGD-only reads ~1.5pp high (why our RAMP repro 46.1 > paper 44.6) |
 - **Training uniform-10 does NOT make eval uniform.** Eval keeps l1 ≥ linf/l2.
-- Current `base.eval_attack` = APGD 100/100/100 (l1 not shortchanged, F1-safe) — used for RAMP repro;
-  keep for screening consistency. Final rows switch to full-AA.
+- `base.eval_attack` = APGD **20/20/100** (P-04 convergence plateaus on RAMP ep80: l∞@20, l2@10-20,
+  l1@100=49.6=l1@200). Reproduces 100/100/100 exactly (union 46.0, Δ0.00). Final rows switch to full-AA.
 
 ## Two-phase plan
 ### PHASE 1 — DEVELOP, stop at epoch 50 (pre-drop), **1 seed** each
@@ -99,4 +99,4 @@ ep_50 = 42.9** (same recipe, same pre-drop state — apples-to-apples).
 2. ✅ **resume DONE + verified**: `--resume auto` restores model+optimizer+scheduler+epoch+RNG; continuity check PASS (`scripts/dev/resume_continuity_check.py` — resumed run reproduces the uninterrupted lr schedule incl. the drop). Phase-2 continuation is sound.
 3. ✅ **results layout DONE**: per-run `results/<run>/s<seed>/{train,eval,eval_fullAA,smoke}.json + ckpt/`, self-documenting `run_meta.json` (recipe/attack-steps/config-hash/git/eps). Dashboard reads nested + flat.
 4. ✅ **λ RESOLVED (P-02)**: λ=5 is RAMP's own from-scratch RN-18 value (`scripts/cifar10/RAMP_scratch_cifar10.sh`: `--lbd 5`); paper λ=2 is the WRN/TRADES variant. Recipe-matched by construction; no re-run.
-5. ✅ **l1 EVAL convergence CLOSED:** RAMP ep80 l1 APGD-100 = APGD-200 = 46.8 (Δ0) → screening 100/100/100 is F1-safe. ⏳ **Still verify** l1 TRAINING step_size 0.10 strength on the first reactive run.
+5. ✅ **Eval convergence measured (P-04) → screening budget = 20/20/100:** RAMP ep80 n=1000 plateaus l∞@20/l2@20/l1@100 (l1@100=49.6=l1@200; l1@50 −0.5pp); = 100/100/100 exactly (union 46.0, Δ0.00), ~53% faster. (Earlier n=500 46.8 was a subsample artifact.) ⏳ **Still verify** l1 TRAINING step_size 0.10 + re-confirm plateaus on the first reactive run.

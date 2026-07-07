@@ -192,7 +192,7 @@
 <body>
   <header>
     <h1>AttackDRO Dashboard</h1>
-    <p>Regenerated from <code>docs/PROJECT_STATE.md</code> and <code>results/*.json</code> (+ <code>run_status.json</code>) at 2026-07-07 11:43 UTC.</p>
+    <p>Regenerated from <code>docs/PROJECT_STATE.md</code> and <code>results/*.json</code> (+ <code>run_status.json</code>) at 2026-07-07 12:35 UTC.</p>
   </header>
   <main>
     <div class="status"><p><strong>Phase:</strong> recipe RESET applied; single-recipe (RAMP) two-phase plan written; <strong>launch nothing — awaiting GO.</strong> Branch <code>card-pb-fixes</code>.</p>
@@ -201,7 +201,7 @@
 <li>[Kiet ✓] <strong>v2 frontier arm range = {8, 16, 24, 32}</strong> (LOCKED) — maps the l1-recovery-vs-FLOPs frontier: (a) l1 recovers at FLOPs≤0.60 → conditional efficiency win; (b) recovers only &gt;0.60 → characterized &quot;l1 predictability floors efficiency at ~X%&quot; (the curve IS the result).</li>
 <li>[<strong>P-02 ✓ RESOLVED</strong>] <strong>λ=5 IS RAMP&#x27;s canonical from-scratch RN-18 value</strong> — their own <code>scripts/cifar10/RAMP_scratch_cifar10.sh</code> runs <code>--lbd 5 --fname RAMP_beta_0.5_lbd_5</code> (exactly our model family); paper&#x27;s λ=2 is the WideResNet/TRADES variant (<code>--lbd 2</code> only on the WRN line). Our re-run is recipe-matched <strong>by construction</strong>; no λ=2 re-run needed.</li>
 <li>[CC ✓] <strong>Blockers DONE + verified:</strong> <code>save_freq</code> (every-10 ckpts) + <code>resume</code> (model+optimizer+scheduler+epoch+RNG) — <strong>continuity check PASS</strong> (<code>scripts/dev/resume_continuity_check.py</code>: resumed run reproduces the uninterrupted lr schedule incl. the drop, epoch seq 0..N). Per-run results layout live (<code>results/&lt;run&gt;/s&lt;seed&gt;/{train,eval,eval_fullAA}.json + ckpt/ + run_meta.json</code>).</li>
-<li>[CC ✓] <strong>l1 EVAL convergence CLOSED:</strong> RAMP ep80 l1 APGD-100 = APGD-200 = 46.8 (Δ0.00pp) → screening eval l1@100 is converged / F1-safe, no raise needed. <strong>Still verify on first reactive run:</strong> l1 TRAINING step_size 0.10 / 10-step strength (training, not eval).</li>
+<li>[CC ✓] <strong>Eval convergence curve MEASURED (P-04, RAMP ep80, n=1000):</strong> l∞ plateaus @20, l2 @10-20, l1 @100 (l1@100=49.6=l1@200 49.5; l1@50=50.1 is 0.5pp short). *(My earlier n=500 &quot;l1@100=46.8=200&quot; was a subsample artifact — RETRACTED; first-500 images are harder.)* <strong>Screening budget SET = <code>20/20/100</code></strong> (base.yaml eval_attack) — reproduces 100/100/100 EXACTLY (union 46.0, Δ0.00) at ~53% fewer steps; l1-heavy = F1-safe. Curve in §6. <strong>On first reactive run:</strong> re-confirm plateaus (model-dependent) + l1 TRAINING step_size 0.10 strength.</li>
 <li>[Kiet/Colab] avg_frozen + 3a @our-recipe = <strong>SUPERSEDED</strong> (stopping); archive JSONs if they land.</li>
 </ul></div>
     <section>
@@ -256,7 +256,7 @@
 <li>[Kiet ✓] <strong>v2 frontier arm range = {8, 16, 24, 32}</strong> (LOCKED) — maps the l1-recovery-vs-FLOPs frontier: (a) l1 recovers at FLOPs≤0.60 → conditional efficiency win; (b) recovers only &gt;0.60 → characterized &quot;l1 predictability floors efficiency at ~X%&quot; (the curve IS the result).</li>
 <li>[<strong>P-02 ✓ RESOLVED</strong>] <strong>λ=5 IS RAMP&#x27;s canonical from-scratch RN-18 value</strong> — their own <code>scripts/cifar10/RAMP_scratch_cifar10.sh</code> runs <code>--lbd 5 --fname RAMP_beta_0.5_lbd_5</code> (exactly our model family); paper&#x27;s λ=2 is the WideResNet/TRADES variant (<code>--lbd 2</code> only on the WRN line). Our re-run is recipe-matched <strong>by construction</strong>; no λ=2 re-run needed.</li>
 <li>[CC ✓] <strong>Blockers DONE + verified:</strong> <code>save_freq</code> (every-10 ckpts) + <code>resume</code> (model+optimizer+scheduler+epoch+RNG) — <strong>continuity check PASS</strong> (<code>scripts/dev/resume_continuity_check.py</code>: resumed run reproduces the uninterrupted lr schedule incl. the drop, epoch seq 0..N). Per-run results layout live (<code>results/&lt;run&gt;/s&lt;seed&gt;/{train,eval,eval_fullAA}.json + ckpt/ + run_meta.json</code>).</li>
-<li>[CC ✓] <strong>l1 EVAL convergence CLOSED:</strong> RAMP ep80 l1 APGD-100 = APGD-200 = 46.8 (Δ0.00pp) → screening eval l1@100 is converged / F1-safe, no raise needed. <strong>Still verify on first reactive run:</strong> l1 TRAINING step_size 0.10 / 10-step strength (training, not eval).</li>
+<li>[CC ✓] <strong>Eval convergence curve MEASURED (P-04, RAMP ep80, n=1000):</strong> l∞ plateaus @20, l2 @10-20, l1 @100 (l1@100=49.6=l1@200 49.5; l1@50=50.1 is 0.5pp short). *(My earlier n=500 &quot;l1@100=46.8=200&quot; was a subsample artifact — RETRACTED; first-500 images are harder.)* <strong>Screening budget SET = <code>20/20/100</code></strong> (base.yaml eval_attack) — reproduces 100/100/100 EXACTLY (union 46.0, Δ0.00) at ~53% fewer steps; l1-heavy = F1-safe. Curve in §6. <strong>On first reactive run:</strong> re-confirm plateaus (model-dependent) + l1 TRAINING step_size 0.10 strength.</li>
 <li>[Kiet/Colab] avg_frozen + 3a @our-recipe = <strong>SUPERSEDED</strong> (stopping); archive JSONs if they land.</li>
 </ul>
       </section>

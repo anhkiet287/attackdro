@@ -14,14 +14,14 @@
 - [Kiet ✓] **v2 frontier arm range = {8, 16, 24, 32}** (LOCKED) — maps the l1-recovery-vs-FLOPs frontier: (a) l1 recovers at FLOPs≤0.60 → conditional efficiency win; (b) recovers only >0.60 → characterized "l1 predictability floors efficiency at ~X%" (the curve IS the result).
 - [**P-02 ✓ RESOLVED**] **λ=5 IS RAMP's canonical from-scratch RN-18 value** — their own `scripts/cifar10/RAMP_scratch_cifar10.sh` runs `--lbd 5 --fname RAMP_beta_0.5_lbd_5` (exactly our model family); paper's λ=2 is the WideResNet/TRADES variant (`--lbd 2` only on the WRN line). Our re-run is recipe-matched **by construction**; no λ=2 re-run needed.
 - [CC ✓] **Blockers DONE + verified:** `save_freq` (every-10 ckpts) + `resume` (model+optimizer+scheduler+epoch+RNG) — **continuity check PASS** (`scripts/dev/resume_continuity_check.py`: resumed run reproduces the uninterrupted lr schedule incl. the drop, epoch seq 0..N). Per-run results layout live (`results/<run>/s<seed>/{train,eval,eval_fullAA}.json + ckpt/ + run_meta.json`).
-- [CC ✓] **l1 EVAL convergence CLOSED:** RAMP ep80 l1 APGD-100 = APGD-200 = 46.8 (Δ0.00pp) → screening eval l1@100 is converged / F1-safe, no raise needed. **Still verify on first reactive run:** l1 TRAINING step_size 0.10 / 10-step strength (training, not eval).
+- [CC ✓] **Eval convergence curve MEASURED (P-04, RAMP ep80, n=1000):** l∞ plateaus @20, l2 @10-20, l1 @100 (l1@100=49.6=l1@200 49.5; l1@50=50.1 is 0.5pp short). *(My earlier n=500 "l1@100=46.8=200" was a subsample artifact — RETRACTED; first-500 images are harder.)* **Screening budget SET = `20/20/100`** (base.yaml eval_attack) — reproduces 100/100/100 EXACTLY (union 46.0, Δ0.00) at ~53% fewer steps; l1-heavy = F1-safe. Curve in §6. **On first reactive run:** re-confirm plateaus (model-dependent) + l1 TRAINING step_size 0.10 strength.
 - [Kiet/Colab] avg_frozen + 3a @our-recipe = **SUPERSEDED** (stopping); archive JSONs if they land.
 
 ## 3 · KEY DECISIONS LOCKED  (each = one-line reason)
 - **eps = (8/255, 0.5, 12)** — subfield standard (RAMP/E-AT/C&H), enables direct SOTA comparison. (Was 0.03; archived.)
 - **Single recipe = RAMP throughout** — lr 0.05→0.005 (×10 drop at ep70), 80ep, save/10 — confound-free comparison with RAMP at *every* epoch.
 - **Training inner-max = uniform 10/10/10** — matches RAMP `--at_iter 10`; symmetric budget simplifies CARD-PB allocation (reactive budget now 30 steps).
-- **Eval = l1-heavy (l1 ≥ linf/l2), never uniform** — else we under-attack l1 and overstate it (our own F1). Screening APGD n=1000; **final claim rows = full AutoAttack** (matches RAMP; APGD reads ~1.5pp high).
+- **Eval screening = APGD `20/20/100` (l∞/l2/l1), n=1000** — the measured per-norm convergence plateaus (P-04); l1-heavy so l1 is never under-attacked (our own F1); = full-budget 100/100/100 exactly, ~53% faster. **Final claim rows = full AutoAttack** (matches RAMP; APGD reads ~1.5pp high). Never uniform-few.
 - **1-seed develop → winner to 3-seed → 20-seed for the final efficiency pair** — cheap screening, seeds only where a claim rides. FLOPs ratio reliable at 1 seed; Δunion needs seeds.
 - **Metric = worst-case union**; iterate on APGD, claim on full-AA. Never mix per-norm avg with union; never claim SOTA from local rows.
 - **W&B** project `attackdro-union`, entity null (→ default), run `{method}_{variant}_s{seed}`; offline+sync more reliable unattended. Eval JSON on disk = source of truth.
@@ -54,6 +54,16 @@ Reactive predecessor = per-sample soft-T=0.25 (crafts all 3 norms every step, so
   - **Shape (changes how we report):** NON-MONOTONIC — **plateaus ~43 across ep30–70, jumps to 46 ONLY after the ep70 lr-drop.** So the **lr-drop (not raw epochs) is what lifts RAMP past ~43.** Recipe contribution = 46.0−42.9 = **+3.1pp from the drop**; matched-budget gap (RAMP@50 − our archived reactive@50) = ~1.0pp.
   - **ep_50 (42.9) is a LOCAL TROUGH** (43.6/42.9/43.6 at ep40/50/60) — valid matched-budget comparator but RAMP's weakest point there. **Paper framing:** report the CURVE, not the single point (avoids looking like we cherry-picked RAMP's low point): "matched-budget gap ~1pp; RAMP plateaus 43–44 pre-drop, reaches 46 only after the final lr-drop." **Phase-2 implication:** our method@ep50 likely low pre-drop; the decisive number is **union@80 post-drop** (expect a similar jump) → reinforces the top-2 carry rule (pre-drop ranking unreliable for post-drop order).
   - Cited: RAMP paper 44.6 (full-AA), C&H MAX 44.0 / MSD 43.9 / E-AT 42.4.
+- **APGD eval convergence curve (P-04, RAMP ep80, n=1000)** — sets the screening budget:
+
+  | APGD steps | 10 | 20 | 50 | 100 | plateau |
+  |---|---|---|---|---|---|
+  | l∞ | 47.4 | 47.3 | 47.3 | 47.3 | **@20** |
+  | l2 | 65.8 | 65.8 | 65.8 | 65.8 | **@10-20** |
+  | l1 | 55.6 | 51.3 | 50.1 | 49.6 | **@100** (=l1@200 49.5) |
+  | union | 47.3 | 46.8 | 46.4 | 46.0 | |
+
+  → **screening = 20/20/100** (base.yaml): = 100/100/100 exactly (union 46.0, Δ0.00), ~53% faster, l1-heavy/F1-safe. l1 genuinely needs 100 (still −0.5pp at 50); l∞/l2 converge by 20. Re-confirm per model class on the first reactive run.
 - **ARCHIVED (provenance only, `results/archive/our_recipe_50ep_drop25/`, our-recipe 50ep):** reactive 3-seed **41.90±0.22** (l1 48.10) — RETRACTED as active; predictive v1 (F9) 40.6/l1 44.3/FLOPs 0.522; predictive v2 sweep-1 ks8 41.5/l1 45.6/FLOPs 0.80.
 - Official ckpt re-evals (reference): MSD* 42.5, AVG* 38.7, MAX* 25.0 (@0.03, our harness).
 

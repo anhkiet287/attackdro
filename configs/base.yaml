@@ -51,9 +51,15 @@ threat_model:
 # Attack VERSION policy (P1): use `apgd` (APGD-CE + APGD-T) for ALL iteration /
 # head-to-head comparison; reserve `standard` (full AutoAttack) for FINAL paper
 # numbers only. `version` is a CLI flag (scripts/evaluate.py --version).
+# SCREENING budget (APGD, n=1000) set to per-norm CONVERGENCE PLATEAUS measured on RAMP
+# ep80 (P-04, 2026-07-07, n=1000): l∞ plateaus @20 (47.3), l2 @10-20 (65.8), l1 @100
+# (49.6 = l1@200 49.5; l1@50 50.1 is 0.5pp short). 20/20/100 reproduces 100/100/100
+# EXACTLY (union 46.0, Δ0.00) at 140 vs 300 steps (~53% faster). l1-heavy = F1-safe (never
+# under-attacks l1). FINAL claim rows use `--version standard` (full AutoAttack) regardless.
+# Re-confirm plateaus on the first in-house reactive run (convergence is model-dependent).
 eval_attack:
-  linf: { steps: 100, restarts: 1 }
-  l2:   { steps: 100, restarts: 1 }
+  linf: { steps: 20,  restarts: 1 }
+  l2:   { steps: 20,  restarts: 1 }
   l1:   { steps: 100, restarts: 1 }
 
 # ---- Logging / IO -----------------------------------------------------------
