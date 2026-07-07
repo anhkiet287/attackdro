@@ -50,7 +50,9 @@ def _arm(k):
         flops = sum(post) / len(post) if post else None
         last = h[-1] if h else {}
         floor = {n: last.get(f"floor/{n}") for n in ("linf", "l2", "l1")}
-        miss = {n: last.get(f"phi/miss_rate_{n}") for n in ("linf", "l2", "l1")}
+        # v2 driver = miss VOLUME (population-aware); fall back to 1-recall for older runs
+        miss = {n: (last.get(f"phi/miss_vol_{n}", last.get(f"phi/miss_rate_{n}")))
+                for n in ("linf", "l2", "l1")}
     ok = (U_LO <= union <= U_HI) and (l1 >= L1_MIN) and (flops is not None and flops <= FLOPS_MAX)
     return {"k": k, "ready": True, "union": union, "l1": l1, "linf": linf, "l2": l2,
             "flops": flops, "floor": floor, "miss": miss, "pass": ok}

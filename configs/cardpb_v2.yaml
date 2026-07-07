@@ -23,5 +23,8 @@ train:
     pb_floor_kspan: 12          # floor scale; SWEEP {8,12,16} via --set
     pb_floor_ema: 0.5           # smooth the ~12-sample/batch recal miss estimate (R5)
     pb_cold_epochs: 5           # paper regime (cold=1 was stress-test only)
+    # v2 measurement fix (sweep-1 invalidated): floor now driven by miss VOLUME
+    # P(true=g & b_hat!=g), population-aware, so rarely-bound free l2 stays thin.
+    pb_adaptive_floor: false    # OFF in confidence mode (double-counts + probe-blind, F1)
     # inherited from cardpb.yaml: pb_k_floor=3 (=k_min), pb_guard_pp=3.0 (adaptive floor ON),
     # pb_beta=0.5, pb_recal_rho=0.1, temperature=0.25, objective=predictive_binding.

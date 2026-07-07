@@ -138,6 +138,10 @@ class GroupDROTrainer:
             self.pb_floor_mode = gcfg.get("pb_floor_mode", "fixed")   # fixed | confidence
             self.pb_floor_kspan = int(gcfg.get("pb_floor_kspan", 12))
             self.pb_floor_ema = float(gcfg.get("pb_floor_ema", 0.5))  # smooth the ~12-sample/batch miss (R5)
+            # Adaptive probe-driven guard: kept for fixed mode (v1) but OFF in confidence
+            # mode by default — it double-counts with the confidence floor and is probe-blind
+            # on l1 (F1), which inflated FLOPs in sweep-1 (linf pushed to full). Overridable.
+            self.pb_adaptive = bool(gcfg.get("pb_adaptive_floor", self.pb_floor_mode != "confidence"))
             self._full_steps = [int(s.get("steps", 10)) for s in self.attack_specs]
             self._pb_extra_floor = [0 for _ in self.attack_specs]   # adaptive-guard bumps, ON TOP of the base floor
             self._pb_conf_floor = [self.pb_k_floor for _ in self.attack_specs]  # confidence base (>= k_min)
@@ -443,15 +447,21 @@ class GroupDROTrainer:
             metrics["pb/floor_mode"] = self.pb_floor_mode
             metrics["pb/floor_kspan"] = self.pb_floor_kspan
             for g, norm in enumerate(self.group_norms):
-                # per-norm miss = 1 - recall on the recal subset; EMA-smoothed (R5). Drives
-                # the v2 confidence floor and makes the FLOPs-vs-l1-recovery story legible.
-                if self._pb_missd[g]:
-                    m = self._pb_missn[g] / self._pb_missd[g]
-                    self._pb_miss_ema[g] = (m if self._pb_miss_ema[g] is None
-                                            else self.pb_floor_ema * m
+                # v2 FIX (sweep-1 was confounded): drive the floor by miss VOLUME =
+                # P(true=g AND b_hat!=g) — the joint, POPULATION-aware probability over ALL
+                # recal samples — not 1-recall (conditional). A rarely-bound norm (l2, free
+                # per F3) then can't get a high floor just because its few true samples are
+                # mispredicted; only norms that are BOTH frequently bound AND often missed
+                # (l1) earn a high floor. EMA-smoothed (R5). 1-recall still logged for diag.
+                if self._pb_mis_den:
+                    vol = self._pb_missn[g] / self._pb_mis_den
+                    self._pb_miss_ema[g] = (vol if self._pb_miss_ema[g] is None
+                                            else self.pb_floor_ema * vol
                                             + (1 - self.pb_floor_ema) * self._pb_miss_ema[g])
                 if self._pb_miss_ema[g] is not None:
-                    metrics[f"phi/miss_rate_{norm}"] = self._pb_miss_ema[g]
+                    metrics[f"phi/miss_vol_{norm}"] = self._pb_miss_ema[g]     # the floor DRIVER
+                if self._pb_missd[g]:
+                    metrics[f"phi/miss_rate_{norm}"] = self._pb_missn[g] / self._pb_missd[g]  # 1-recall (diag)
                 metrics[f"floor/{norm}"] = self._floor_steps(g)
         return metrics
 
@@ -627,7 +637,8 @@ class GroupDROTrainer:
             ev = self.evaluate()
             if self.objective == "predictive_binding":
                 self._recompute_conf_floor()       # v2: set next epoch's floor from measured miss
-                self._pb_adaptive_floor(ev)         # probe-driven bump on top (secondary safety)
+                if self.pb_adaptive:
+                    self._pb_adaptive_floor(ev)     # probe-driven bump (fixed mode only by default)
             pb = self._dump_probe_binding(epoch)
             # CARD-3a: set next epoch's q from THIS epoch's per-norm probe robust-acc
             # (binding-aware: weakest norm -> most weight). Epoch 0 trains uniform.
