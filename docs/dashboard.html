@@ -187,12 +187,36 @@
       .status, .grid { grid-template-columns: 1fr; }
       th, td { white-space: normal; }
     }
+    /* --- Findings F1-F9 cards (P-06): typed source + status --- */
+    .finding { border: 1px solid var(--line); border-left-width: 5px; border-radius: 8px;
+               padding: 10px 13px; margin: 9px 0; background: var(--panel); }
+    .finding.src-in-house { border-left-color: #0d9488; }
+    .finding.src-cited { border-left-color: #d97706; }
+    .finding.src-cross-confirmed { border-left-color: #7c3aed; }
+    .finding-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 5px; }
+    .fid { font-weight: 800; font-size: 0.98rem; color: var(--accent-2); }
+    .ftag, .fstatus { font-size: 11px; padding: 1.5px 8px; border-radius: 11px; font-weight: 700;
+                      letter-spacing: 0.02em; }
+    .ftag-in-house { background: #ccfbf1; color: #0f766e; }
+    .ftag-cited { background: #fef3c7; color: #92400e; }
+    .ftag-cross-confirmed { background: #ede9fe; color: #6d28d9; }
+    .fstatus-confirmed { background: #dcfce7; color: #166534; }
+    .fstatus-decision-grade { background: #dbeafe; color: #1e40af; }
+    .fstatus-open-frontier { background: #ffedd5; color: #9a3412; }
+    .fstatus-fixes-committed { background: #f3e8ff; color: #7e22ce; }
+    .fconc { margin: 3px 0; font-weight: 600; color: var(--ink); }
+    .fev, .fsrc { margin: 3px 0; font-size: 0.86rem; color: var(--muted); }
+    .fsrc code, .fev code { font-size: 0.82rem; }
+    .fchain { margin-top: 7px; font-size: 0.86rem; }
+    .fchain summary { cursor: pointer; color: var(--accent); font-weight: 700; }
+    .fchain ol { margin: 6px 0 2px 0; padding-left: 20px; }
+    .fchain li { margin: 5px 0; color: var(--ink); }
   </style>
 </head>
 <body>
   <header>
     <h1>AttackDRO Dashboard</h1>
-    <p>Regenerated from <code>docs/PROJECT_STATE.md</code> and <code>results/*.json</code> (+ <code>run_status.json</code>) at 2026-07-07 12:47 UTC.</p>
+    <p>Regenerated from <code>docs/PROJECT_STATE.md</code> and <code>results/*.json</code> (+ <code>run_status.json</code>) at 2026-07-07 12:52 UTC.</p>
   </header>
   <main>
     <div class="status"><p><strong>Phase:</strong> recipe RESET applied; single-recipe (RAMP) two-phase plan written; <strong>launch nothing — awaiting GO.</strong> Branch <code>card-pb-fixes</code>.</p>
@@ -230,29 +254,25 @@
 <li>So most of the headline RAMP−ours gap (+4.1pp) is <strong>training length</strong>, not the method — the F7 recipe-confound, quantified.</li>
 </ul>
     </section>
-    <div class="grid">
-      <section>
-        <h2>Findings</h2>
-        <ul>
-<li><strong>F1</strong> — weak/uniform l1 attacks *overstate* l1 robustness; APGD-l1 changes numbers AND diagnosis. (Drives the &quot;eval l1-heavy&quot; rule.)</li>
-<li><strong>F2</strong> — strong union models are usually linf-bound; RAMP repro especially linf-strong.</li>
-<li><strong>F3</strong> — l2 robustness is largely free/spillover; starving l2 didn&#x27;t make it binding.</li>
-<li><strong>F4</strong> — loss-signal GroupDRO is neutral-to-harmful under recipe control (<code>attackdro_union</code> 39.7 &lt; <code>avg_frozen</code> 40.6). Signal choice is first-order.</li>
-<li><strong>F5</strong> — weak probes can *invert* norm-difficulty ranking; train-time signals can point at the wrong binding norm → calibrate any decision-driving signal against strong eval.</li>
-<li><strong>F6 (Gate-α, decision-grade)</strong> — per-sample binding is a <strong>short-horizon TRAIT with a state overlay</strong>: on 512 fixed probes, l1 <strong>EXCESS +53.8pp</strong> (retention 63.4% vs 9.6% chance, κ0.60), linf κ0.52 → <strong>predictive weighting is viable</strong> (Conj-2 PASS). Caveat: most l1 samples spend the majority linf-bound → predictor must be <strong>short-horizon/EMA</strong>, not a fixed label. (<code>results/trait_state_v3.md</code>)</li>
-<li><strong>F7</strong> — recipe/source confounds are huge (AVG official 38.7 vs in-house 40.6; MAX official 25.0 vs 43.9; MSD 42.5 vs 44.1) → keep tiers separate; <strong>this motivates the single-recipe reset</strong>. Corroborated: RAMP@50 42.9 vs RAMP@80 46.1 = +3.2pp from *epochs alone* (our own measurement); RAMP Table-25 (44.6 needs 10-15 ft epochs, 43.6 at 5); RAMP Table-5 lists 42.9 (fine-tune RN-18) = our RAMP@50 — suggestive, NOT a validation (fine-tune ≠ from-scratch; see P-02).</li>
-<li><strong>F8 (Conj-1)</strong> — hard per-sample MAX is ~10× more seed-variable than soft-T (max_inhouse std 0.62pp vs T=0.25 0.06pp). Hard argmax routes each gradient to one seed-sensitive norm; soft-T averages → <strong>soft &gt; hard as a formulation</strong>, eps-independent.</li>
-<li><strong>F9 (the reasoning chain — CENTRAL) —</strong> predictive CARD-PB s0 was NEGATIVE (union 40.6 &lt; reactive 41.7, l1 −3.2pp) at FLOPs 0.522. <strong>Then code review found the read was corrupted by bugs, not the hypothesis:</strong></li>
-</ul>
-<p>  - <strong>R1 (blocker):</strong> the safety floor was <strong>INERT</strong> — a &quot;raised&quot; floor changed the FLOPs counter + log but never the actual attack (floor attacks fixed at 3 steps). So &quot;floor self-corrected&quot; was false, FLOPs over-counted, and any floor sweep was a no-op. <strong>Fixed:</strong> <code>_rebuild_floor</code> rebuilds the attack from the current step count. Unit + re-smoke proof: floor 3→5 raised FLOPs 0.525→0.614 and epoch-time +12% (real steps).</p>
-<p>  - <strong>R3:</strong> φ&#x27;s EMA <code>Lbar</code> was updated from <strong>floored (under-attacked) losses</strong> → once φ dropped a norm it got floored → its loss decayed → <strong>self-reinforcing misprediction</strong> (likely the real F9 driver). <strong>Fixed:</strong> update <code>Lbar</code> only for full-budget norms (predicted + recal).</p>
-<p>  - <strong>R2:</strong> the card&#x27;s β↔memory labels were inverted vs the code EMA (high β = short memory). <strong>Fixed</strong> in the card.</p>
-<p>  - <strong>v2 sweep-1 confound:</strong> the confidence floor drove on <strong>miss = 1−recall</strong> (population-blind) → free l2 (rare-but-mispredicted) got miss=1.0 → floored to full; probe-blind adaptive guard pushed linf full → FLOPs 0.80 (ks8: union 41.5, l1 45.6 — l1 still short). <strong>Fixed:</strong> miss = <strong>P(true=g ∧ b̂≠g)</strong> (volume) + adaptive guard OFF. Re-smoke: l2 floor stays 3, FLOPs 0.53–0.59.</p>
-<p>  - <strong>Open frontier:</strong> volume-miss gives LOW l1 floors (~5) — below sweep-1&#x27;s 7 which already failed → l1 likely recovers only at higher FLOPs → the <strong>&quot;l1 predictability floors the efficiency&quot;</strong> finding, which the extended {8,16,24,32} sweep would *characterize as a frontier* rather than just confirm.</p>
-      </section>
-      <section>
-        <h2>Open Decisions</h2>
-        <p><strong>Phase:</strong> recipe RESET applied; single-recipe (RAMP) two-phase plan written; <strong>launch nothing — awaiting GO.</strong> Branch <code>card-pb-fixes</code>.</p>
+    <section>
+      <h2>Findings — mechanism spine (F1–F9)</h2>
+      <p style="margin:0 0 8px;color:var(--muted);font-size:.85rem;">Source type:
+        <span class="ftag ftag-in-house">IN-HOUSE</span>
+        <span class="ftag ftag-cited">CITED</span>
+        <span class="ftag ftag-cross-confirmed">CROSS-CONFIRMED</span> — tiers never mixed.</p>
+      <article class="finding src-cross-confirmed"><div class="finding-head"><span class="fid">F1</span><span class="ftag ftag-cross-confirmed">CROSS-CONFIRMED</span><span class="fstatus fstatus-confirmed">confirmed</span></div><p class="fconc">Weak / uniform-few l1 attacks OVERSTATE l1 robustness — APGD-l1 changes both the numbers and the diagnosis. (Drives our eval-l1-heavy rule.)</p><p class="fev"><strong>Evidence:</strong> Convergence: l1 needs ~100 APGD steps (l1@50=50.1 → l1@100=49.6=l1@200 49.5); l∞/l2 plateau by 20. A short l1 budget silently over-reports l1.</p><p class="fsrc"><strong>Source:</strong> IN-HOUSE: P-04 convergence curve (RAMP ep80, n=1000) · CITED: Croce &amp; Hein, “Mind the box: l1-APGD”, ICML 2021 (l1-APGD).</p></article>
+<article class="finding src-in-house"><div class="finding-head"><span class="fid">F2</span><span class="ftag ftag-in-house">IN-HOUSE</span><span class="fstatus fstatus-confirmed">confirmed</span></div><p class="fconc">Strong union models are usually l∞-bound; our RAMP reproduction is especially l∞-strong under both eps settings.</p><p class="fev"><strong>Evidence:</strong> RAMP repro per-norm @8/255: l∞ 47.2 / l2 65.8 / l1 49.7 — union tracks the l∞/l1 pair, l2 never binds.</p><p class="fsrc"><strong>Source:</strong> IN-HOUSE: results/eval_ramp_repro_eps8255_apgd_n1000.json + eps003.</p></article>
+<article class="finding src-in-house"><div class="finding-head"><span class="fid">F3</span><span class="ftag ftag-in-house">IN-HOUSE</span><span class="fstatus fstatus-confirmed">confirmed</span></div><p class="fconc">l2 robustness is largely free / spillover in this geometry; starving l2 did not make it the binding norm.</p><p class="fev"><strong>Evidence:</strong> l2 stays 63–66% across methods despite near-zero learned weight; the q-floor-for-l2 gate never opened.</p><p class="fsrc"><strong>Source:</strong> IN-HOUSE: results/*.json per-norm columns; refuted-ideas ledger (q-floor l2).</p></article>
+<article class="finding src-in-house"><div class="finding-head"><span class="fid">F4</span><span class="ftag ftag-in-house">IN-HOUSE</span><span class="fstatus fstatus-confirmed">confirmed</span></div><p class="fconc">Loss-signal GroupDRO is neutral-to-slightly-harmful under recipe control — the weighting SIGNAL is first-order, not the DRO machinery.</p><p class="fev"><strong>Evidence:</strong> attackdro_union 39.7±0.9 &lt; avg_frozen 40.6±0.5 (union, 3-seed, same recipe).</p><p class="fsrc"><strong>Source:</strong> IN-HOUSE: results/archive/ eval_attackdro_union_s*, eval_avg_frozen_s* (@0.03).</p></article>
+<article class="finding src-in-house"><div class="finding-head"><span class="fid">F5</span><span class="ftag ftag-in-house">IN-HOUSE</span><span class="fstatus fstatus-confirmed">confirmed</span></div><p class="fconc">Weak probes can INVERT norm-difficulty ranking (not just add noise) — any decision-driving signal must be calibrated against strong eval.</p><p class="fev"><strong>Evidence:</strong> Cheap train-time probes mis-ranked the binding norm vs APGD; drove wrong q-allocation until calibrated.</p><p class="fsrc"><strong>Source:</strong> IN-HOUSE: gate-α diagnostics, results/trait_state_v3.md (probe vs APGD).</p></article>
+<article class="finding src-in-house"><div class="finding-head"><span class="fid">F6</span><span class="ftag ftag-in-house">IN-HOUSE</span><span class="fstatus fstatus-decision-grade">decision-grade</span></div><p class="fconc">Per-sample binding is a SHORT-HORIZON TRAIT with a state overlay → predictive per-sample weighting is VIABLE (Gate-α PASS, Conj-2).</p><p class="fev"><strong>Evidence:</strong> 512 fixed indexed probes, 10 dumps: l1 EXCESS +53.8pp (retention 63.4% vs 9.6% chance, κ0.60), l∞ κ0.52. Caveat: most l1 samples spend the majority l∞-bound → predictor must be short-horizon/EMA, not a fixed label.</p><p class="fsrc"><strong>Source:</strong> IN-HOUSE (decision-grade): results/trait_state_v3.md; scripts/dev/binding_trait_vs_state_v3.py.</p></article>
+<article class="finding src-cross-confirmed"><div class="finding-head"><span class="fid">F7</span><span class="ftag ftag-cross-confirmed">CROSS-CONFIRMED</span><span class="fstatus fstatus-confirmed">confirmed</span></div><p class="fconc">Recipe / source confounds are HUGE — same method, different recipe differs by tens of points. Motivates the single-recipe (RAMP) reset.</p><p class="fev"><strong>Evidence:</strong> AVG official 38.7 vs in-house 40.6 · MAX official 25.0 vs 43.9 · MSD 42.5 vs 44.1. Corroborated on RAMP itself: @50 42.9 vs @80 46.0 = +3.1pp from EPOCHS alone.</p><p class="fsrc"><strong>Source:</strong> IN-HOUSE: our re-evals (results/) + RAMP epoch curve (results/ramp_epoch_curve.md) · CITED: RAMP paper (Jiang et al., NeurIPS 2024) Table 25 (44.6 needs 10–15 ft ep; 43.6 at 5) &amp; Table 5 (RN-18 42.9).</p></article>
+<article class="finding src-in-house"><div class="finding-head"><span class="fid">F8</span><span class="ftag ftag-in-house">IN-HOUSE</span><span class="fstatus fstatus-confirmed">confirmed</span></div><p class="fconc">Hard per-sample MAX is ~10× more SEED-VARIABLE than soft-T → soft-T is the stabler formulation (eps-independent).</p><p class="fev"><strong>Evidence:</strong> max_inhouse 3-seed std 0.62pp (43.9 / 44.8 / 43.6) vs T=0.25 std 0.06pp. Hard argmax routes each gradient to one seed-sensitive norm; soft-T averages it.</p><p class="fsrc"><strong>Source:</strong> IN-HOUSE (Conj-1, pre-registered): results/archive/ eval_max_inhouse_s{0,1,2} (@0.03).</p></article>
+<article class="finding src-in-house"><div class="finding-head"><span class="fid">F9</span><span class="ftag ftag-in-house">IN-HOUSE</span><span class="fstatus fstatus-open-frontier">open-frontier</span></div><p class="fconc">Predictive CARD-PB&#x27;s first negative was CORRUPTED BY BUGS, not the hypothesis. Fixed → now an open efficiency frontier (Phase-1 de-risk pending).</p><p class="fev"><strong>Evidence:</strong> v1 s0: predictive union 40.6 &lt; reactive 41.7, l1 collapses 47.5→44.3 (−3.2pp), FLOPs 0.522. Code review then found the read was bug-driven — see the reasoning chain.</p><p class="fsrc"><strong>Source:</strong> IN-HOUSE: results/archive/our_recipe_50ep_drop25/ (predictive v1/v2 + reactive_vs_predictive_s0.md); fixes committed 968565a, 1c061d5; Phase-1 de-risk → results/phase1_derisk.md (pending).</p><details class="fchain"><summary>reasoning chain (R1 inert-floor → R3 biased-φ → v2 confound → frontier)</summary><ol><li>R1 (BLOCKER, fixed): the safety floor was INERT — a ‘raised’ floor changed the FLOPs counter + log but never the actual attack (floor fixed at 3 steps). So ‘floor self-corrected’ was false, FLOPs over-counted, and any floor sweep was a no-op. Fix: _rebuild_floor rebuilds the attack from the current step count. Proof: floor 3→5 raised FLOPs 0.525→0.614 AND epoch-time +12% (real steps).</li><li>R3 (mechanism, fixed): φ’s EMA Lbar was updated from FLOORED (under-attacked) losses → once φ dropped a norm it got floored → its loss decayed → self-reinforcing misprediction (likely the real F9 driver). Fix: update Lbar only for full-budget norms (predicted + recal).</li><li>R2 (labels, fixed): the card’s β↔memory labels were inverted vs the code EMA (high β = short memory).</li><li>v2 sweep-1 CONFOUND (fixed): the confidence floor drove on miss = 1−recall (population-blind) → rare-but-mispredicted free l2 got miss=1.0 → floored to full; probe-blind adaptive guard pushed l∞ full → FLOPs 0.80, l1 still short (ks8: union 41.5, l1 45.6). Fix: miss = P(true=g ∧ b̂≠g) (population volume) + adaptive guard OFF. Re-smoke: l2 floor stays 3, FLOPs 0.53–0.59.</li><li>OPEN FRONTIER: volume-miss gives LOW l1 floors (~5) — below sweep-1’s 7 which already failed → l1 likely recovers only at higher FLOPs → the ‘l1 predictability floors the efficiency’ finding, which the {8,16,24,32} sweep will CHARACTERIZE as a frontier (recovers ≤ 0.60 = win; else the curve is the result). Phase-1 de-risk answers: does l1 hold after the fixes, or F9 again?</li></ol></details></article>
+    </section>
+    <section>
+      <h2>Open Decisions</h2>
+      <p><strong>Phase:</strong> recipe RESET applied; single-recipe (RAMP) two-phase plan written; <strong>launch nothing — awaiting GO.</strong> Branch <code>card-pb-fixes</code>.</p>
 <ul>
 <li>[Kiet] <strong>GO on the new plan</strong> (<code>docs/EXPERIMENT_TABLE.md</code>): PHASE-1 develop @ep50 1-seed → PHASE-2 winner @ep80 3-seed. <strong>Infra ready — this is the only remaining gate before Phase-1.</strong></li>
 <li>[Kiet ✓] <strong>v2 frontier arm range = {8, 16, 24, 32}</strong> (LOCKED) — maps the l1-recovery-vs-FLOPs frontier: (a) l1 recovers at FLOPs≤0.60 → conditional efficiency win; (b) recovers only &gt;0.60 → characterized &quot;l1 predictability floors efficiency at ~X%&quot; (the curve IS the result).</li>
@@ -263,8 +283,7 @@
 <li>[CC ✓ / Kiet] <strong>PHASE-1 LAUNCHED</strong> (tmux <code>phase1</code>, RAMP recipe ep50 1-seed): reactive → predictive v2 (kspan=16) → <strong>DE-RISK STOP</strong> (does l1 hold after R1/R3/v2, or F9 again?). Verdict → <code>results/phase1_derisk.md</code>; first-run checks → <code>results/phase1_firstrun_checks.md</code>.</li>
 <li>[Kiet — conditional] <strong>Early-stop-attack idea scanned</strong> (<code>docs/EARLYSTOP_FEASIBILITY.md</code>): avoids the predictor (no F9 misprediction) BUT mechanism not novel (FAT/ATES, single-norm) and inherits the weak-example → l1-under-attack risk (our F1/F9 by another name); FLOPs saving decays late-training + batch-limited. <strong>Rec: stay with CARD-PB if de-risk holds; cheap pilot only if F9 recurs.</strong></li>
 </ul>
-      </section>
-    </div>
+    </section>
     <section>
       <h2>Decision History</h2>
       <div class="timeline"><article class="timeline-item"><div class="timeline-date">2026-07-07</div><h3>RESET · Method lane → RAMP recipe (single-recipe, confound-free) + ARCHIVE</h3><ul>

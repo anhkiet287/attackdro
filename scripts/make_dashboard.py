@@ -645,6 +645,48 @@ def timeline_entries(log_md: str) -> str:
               f'</summary>{older}</details>')
 
 
+_SRC_LABEL = {"in-house": "IN-HOUSE", "cited": "CITED", "cross-confirmed": "CROSS-CONFIRMED"}
+
+
+def load_findings() -> list:
+    p = RESULTS / "findings.json"
+    if not p.exists():
+        return []
+    try:
+        return json.loads(p.read_text(encoding="utf-8")).get("findings", [])
+    except Exception:
+        return []
+
+
+def render_findings(items: list) -> str:
+    """F1-F9 as cards: conclusion + evidence + TYPED source + status badge (P-06). F9's
+    reasoning chain is an expandable <details> so the R-chain stays visible without bloating."""
+    if not items:
+        return "<p>No <code>results/findings.json</code>.</p>"
+    out = []
+    for f in items:
+        srct = f.get("source_type", "")
+        st = f.get("status", "")
+        card = [f'<article class="finding src-{escape(srct)}">',
+                '<div class="finding-head">',
+                f'<span class="fid">{escape(f.get("id", ""))}</span>',
+                f'<span class="ftag ftag-{escape(srct)}">{escape(_SRC_LABEL.get(srct, srct))}</span>',
+                f'<span class="fstatus fstatus-{escape(st)}">{escape(st)}</span>',
+                '</div>',
+                f'<p class="fconc">{inline_markdown(f.get("conclusion", ""))}</p>',
+                f'<p class="fev"><strong>Evidence:</strong> {inline_markdown(f.get("evidence", ""))}</p>',
+                f'<p class="fsrc"><strong>Source:</strong> {inline_markdown(f.get("source", ""))}</p>']
+        chain = f.get("chain")
+        if chain:
+            lis = "".join(f"<li>{inline_markdown(c)}</li>" for c in chain)
+            card.append('<details class="fchain"><summary>reasoning chain '
+                        '(R1 inert-floor → R3 biased-φ → v2 confound → frontier)</summary>'
+                        f'<ol>{lis}</ol></details>')
+        card.append("</article>")
+        out.append("".join(card))
+    return "\n".join(out)
+
+
 def main() -> None:
     memory_md = read_text(STATE)                       # PROJECT_STATE.md (consolidated)
     log_md = read_text(LOG) if LOG.exists() else ""     # legacy timeline (optional)
@@ -840,6 +882,30 @@ def main() -> None:
       .status, .grid { grid-template-columns: 1fr; }
       th, td { white-space: normal; }
     }
+    /* --- Findings F1-F9 cards (P-06): typed source + status --- */
+    .finding { border: 1px solid var(--line); border-left-width: 5px; border-radius: 8px;
+               padding: 10px 13px; margin: 9px 0; background: var(--panel); }
+    .finding.src-in-house { border-left-color: #0d9488; }
+    .finding.src-cited { border-left-color: #d97706; }
+    .finding.src-cross-confirmed { border-left-color: #7c3aed; }
+    .finding-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 5px; }
+    .fid { font-weight: 800; font-size: 0.98rem; color: var(--accent-2); }
+    .ftag, .fstatus { font-size: 11px; padding: 1.5px 8px; border-radius: 11px; font-weight: 700;
+                      letter-spacing: 0.02em; }
+    .ftag-in-house { background: #ccfbf1; color: #0f766e; }
+    .ftag-cited { background: #fef3c7; color: #92400e; }
+    .ftag-cross-confirmed { background: #ede9fe; color: #6d28d9; }
+    .fstatus-confirmed { background: #dcfce7; color: #166534; }
+    .fstatus-decision-grade { background: #dbeafe; color: #1e40af; }
+    .fstatus-open-frontier { background: #ffedd5; color: #9a3412; }
+    .fstatus-fixes-committed { background: #f3e8ff; color: #7e22ce; }
+    .fconc { margin: 3px 0; font-weight: 600; color: var(--ink); }
+    .fev, .fsrc { margin: 3px 0; font-size: 0.86rem; color: var(--muted); }
+    .fsrc code, .fev code { font-size: 0.82rem; }
+    .fchain { margin-top: 7px; font-size: 0.86rem; }
+    .fchain summary { cursor: pointer; color: var(--accent); font-weight: 700; }
+    .fchain ol { margin: 6px 0 2px 0; padding-left: 20px; }
+    .fchain li { margin: 5px 0; color: var(--ink); }
   </style>
 </head>
 <body>
@@ -866,16 +932,18 @@ def main() -> None:
       <h2>RAMP epoch curve (reference)</h2>
       $ramp_curve
     </section>
-    <div class="grid">
-      <section>
-        <h2>Findings</h2>
-        $findings
-      </section>
-      <section>
-        <h2>Open Decisions</h2>
-        $open_items
-      </section>
-    </div>
+    <section>
+      <h2>Findings — mechanism spine (F1–F9)</h2>
+      <p style="margin:0 0 8px;color:var(--muted);font-size:.85rem;">Source type:
+        <span class="ftag ftag-in-house">IN-HOUSE</span>
+        <span class="ftag ftag-cited">CITED</span>
+        <span class="ftag ftag-cross-confirmed">CROSS-CONFIRMED</span> — tiers never mixed.</p>
+      $findings
+    </section>
+    <section>
+      <h2>Open Decisions</h2>
+      $open_items
+    </section>
     <section>
       <h2>Decision History</h2>
       <div class="timeline">$timeline</div>
@@ -913,7 +981,7 @@ def main() -> None:
         experiment_status=experiment_status(run_status, rows_by_name, live),
         compare_view=compare_view(rows),
         results_table=results_table(rows),
-        findings=render_fragment(extract_section_like(memory_md, "FINDINGS")),
+        findings=render_findings(load_findings()),
         open_items=render_fragment(extract_section_like(memory_md, "CURRENT PHASE")),
         ramp_curve=render_fragment((RESULTS / "ramp_epoch_curve.md").read_text(encoding="utf-8"))
         if (RESULTS / "ramp_epoch_curve.md").exists() else "<p>No ramp_epoch_curve.md yet.</p>",
