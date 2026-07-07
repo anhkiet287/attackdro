@@ -132,10 +132,12 @@ class GroupDROTrainer:
             self.pb_recal_every = int(gcfg.get("pb_recal_every", 0))  # >0 => full-reactive epoch every N
             self.pb_guard_pp = float(gcfg.get("pb_guard_pp", 3.0))
             self._full_steps = [int(s.get("steps", 10)) for s in self.attack_specs]
-            floor_specs = [{**s, "steps": self.pb_k_floor} for s in self.attack_specs]
-            self.floor_attacks = [build_source_attack(s, eps=tm[s["norm"].lower()]["eps"])
-                                  for s in floor_specs]
             self._pb_extra_floor = [0 for _ in self.attack_specs]   # adaptive floor bumps (steps)
+            # R1: floor attacks are (re)built from pb_k_floor + _pb_extra_floor so a
+            # raised floor runs MORE steps, not just logs a higher number.
+            self.floor_attacks = [None] * len(self.attack_specs)
+            for _g in range(len(self.attack_specs)):
+                self._rebuild_floor(_g)
             self._pb_norm_max = [0.0 for _ in self.attack_specs]    # running max probe acc per norm
             self._pb_wrap_train_loader()
             N = len(self.train_loader.dataset)
@@ -159,6 +161,16 @@ class GroupDROTrainer:
               f"norm_losses={self.normalize_losses}")
 
     # ------------------------- CARD-PB predictive-binding ----------------- #
+    def _rebuild_floor(self, g: int) -> None:
+        """(Re)build norm g's floor attack so it runs pb_k_floor + _pb_extra_floor[g]
+        steps. R1 fix: the safety/confidence floor must change the ACTUAL attack, not
+        just the logged step count and FLOPs counter — otherwise a 'raised' floor never
+        attacks any harder and the guarantee is vacuous. Called at init and whenever the
+        floor step count changes (adaptive guard, or v2 confidence floor)."""
+        spec = {**self.attack_specs[g], "steps": self.pb_k_floor + self._pb_extra_floor[g]}
+        self.floor_attacks[g] = build_source_attack(
+            spec, eps=self.cfg["threat_model"][spec["norm"].lower()]["eps"])
+
     def _pb_wrap_train_loader(self) -> None:
         """Rebuild the train loader to yield (x, y, idx) so φ can keep a per-sample
         EMA of binding across epochs (idx = position into the train dataset)."""
@@ -226,9 +238,18 @@ class GroupDROTrainer:
         self.optimizer.step()
 
         # φ EMA update from the crafted per-norm losses (first sighting sets directly).
+        # R3: only norms that received FULL budget for a sample carry an unbiased loss;
+        # floored norms are under-attacked (loss artificially low) and would drag φ's
+        # estimate away from them → self-reinforcing misprediction (a likely F9 driver).
+        # Update ONLY full-budget entries; leave floored entries at their last unbiased
+        # (cold/recal) value. First sighting is always cold (full in all norms, since
+        # cold = epoch<cold | ~seen), so every sample is seeded unbiased across all norms.
         newL = L.detach().t()                            # [B,G]
-        self.pb_Lbar[idx] = torch.where(
-            seen.unsqueeze(1), self.pb_beta * newL + (1 - self.pb_beta) * Lbar_b, newL)
+        full_mask = full_all.unsqueeze(1) | (
+            b_hat.unsqueeze(1) == torch.arange(self.num_groups, device=dev).unsqueeze(0))  # [B,G]
+        ema = self.pb_beta * newL + (1 - self.pb_beta) * Lbar_b
+        updated = torch.where(seen.unsqueeze(1), ema, newL)
+        self.pb_Lbar[idx] = torch.where(full_mask, updated, Lbar_b)
         self.pb_seen[idx] = True
 
         # Misprediction rate p on the recalibration subset (unbiased: full in all norms).
@@ -530,6 +551,7 @@ class GroupDROTrainer:
                 bump = min(self._pb_extra_floor[g] + 2, self._full_steps[g])
                 if bump != self._pb_extra_floor[g]:
                     self._pb_extra_floor[g] = bump
+                    self._rebuild_floor(g)   # R1: the raised floor now actually attacks more
                     print(f"[cardpb] adaptive floor: {norm} probe {acc:.3f} dropped "
                           f">{self.pb_guard_pp}pp vs max {self._pb_norm_max[g]:.3f} "
                           f"-> floor = {self.pb_k_floor + bump} steps")
