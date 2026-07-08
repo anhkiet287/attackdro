@@ -164,6 +164,15 @@ class GroupDROTrainer:
                   f"recal_rho={self.pb_recal_rho} cold_epochs={self.pb_cold_epochs} "
                   f"T={self.temperature} N={N} full_steps={self._full_steps}")
 
+        # --- EXPLORATION lanes (Colab idea-testing; OFF by default → paper runs unaffected). ---
+        # Idea 1: fail-rate threshold allocation. Idea 3: curriculum step ramp. Both act only on
+        # the reactive (non-predictive) path and only when their knob is set. Idea 2 needs no code
+        # (it is CARD-PB with kspan/k_min config). See docs — results go to results/exploration/.
+        self.exp_failrate = gcfg.get("failrate_threshold")          # Idea 1: None = off
+        self.exp_failrate_max = int(gcfg.get("failrate_max_steps", 10))
+        self.exp_curriculum = gcfg.get("curriculum")                # Idea 3: [[ep_lt, steps], ...] or None
+        self._exp_cur_steps = None
+
         self.criterion = nn.CrossEntropyLoss()
         self.logger = WandbLogger(cfg, run_name=cfg.get("run_name"))
         # Per-run results layout: results/<run>/s<seed>/{train,smoke}.json + ckpt/ .
@@ -322,8 +331,45 @@ class GroupDROTrainer:
         return L.detach().sum(dim=1).cpu(), correct, w.mean(dim=1).detach().cpu()
 
     # --------------------------------------------------------------------- #
+    # ------------------------- EXPLORATION helpers (off by default) ------- #
+    def _apply_curriculum(self, epoch: int) -> None:
+        """Idea 3: rebuild the source attacks with a per-epoch ramped step count.
+        curriculum = [[ep_lt, steps], ...]; first entry with epoch < ep_lt wins, else last."""
+        if not self.exp_curriculum:
+            return
+        k = None
+        for ep_lt, steps in self.exp_curriculum:
+            if epoch < ep_lt:
+                k = int(steps)
+                break
+        if k is None:
+            k = int(self.exp_curriculum[-1][1])
+        tm = self.cfg["threat_model"]
+        self.attacks = [build_source_attack({**s, "steps": k},
+                                            eps=tm[s["norm"].lower()]["eps"], attack=self.train_attack)
+                        for s in self.attack_specs]
+        self._exp_cur_steps = k
+
+    def _failrate_craft(self, g: int, x, y):
+        """Idea 1: craft norm g with a batch-level fail-rate early-stop (APGD, ported). Returns
+        (x_adv, steps_used). Stops the norm's attack once >= threshold of the batch has failed."""
+        from ..attacks.apgd_train import apgd_train
+        norm = {"linf": "Linf", "l2": "L2", "l1": "L1"}[self.group_norms[g]]
+        eps = self.cfg["threat_model"][self.group_norms[g]]["eps"]
+        was = self.model.training
+        self.model.eval()
+        x_adv, steps = apgd_train(self.model, x, y, norm=norm, eps=eps,
+                                  n_iter=self.exp_failrate_max, is_train=True,
+                                  stop_frac=self.exp_failrate)
+        if was:
+            self.model.train()
+        return x_adv, steps
+
     def train_epoch(self, epoch: int, max_steps=None) -> dict:
         self.model.train()
+        self._apply_curriculum(epoch)                 # Idea 3 (no-op unless configured)
+        self._exp_steps_sum = [0.0 for _ in range(self.num_groups)]   # Idea 1 step accounting
+        self._exp_steps_cnt = 0
         t0 = time.time()
         n = 0
         group_loss_sum = torch.zeros(self.num_groups)
@@ -377,7 +423,11 @@ class GroupDROTrainer:
 
             per_sample = []                            # list of [B] loss vectors
             for g, atk in enumerate(self.attacks):
-                x_adv = atk(self.model, x, y)          # crafted in eval mode internally
+                if self.exp_failrate is not None:      # Idea 1: fail-rate early-stop craft
+                    x_adv, _steps = self._failrate_craft(g, x, y)
+                    self._exp_steps_sum[g] += _steps
+                else:
+                    x_adv = atk(self.model, x, y)      # crafted in eval mode internally
                 self.model.train()
                 logits = self.model(x_adv)             # train-mode forward (BN updates)
                 loss_vec = nn.functional.cross_entropy(logits, y, reduction="none")
@@ -450,6 +500,17 @@ class GroupDROTrainer:
                 metrics[f"dist/{norm}/p10"] = p10
                 metrics[f"dist/{norm}/p50"] = p50
                 metrics[f"dist/{norm}/p90"] = p90
+        # EXPLORATION metrics (off by default). Idea 1: per-norm steps the fail-rate threshold
+        # actually used + attack-FLOPs vs full 10/10/10 (denom = max_steps × G = 30). Idea 3: the
+        # epoch's curriculum step count.
+        if self.exp_failrate is not None:
+            fr = [self._exp_steps_sum[g] / max(n_batches, 1) for g in range(self.num_groups)]
+            for g, norm in enumerate(self.group_norms):
+                metrics[f"exp/steps_{norm}"] = fr[g]
+            metrics["exp/attack_flops_ratio"] = sum(fr) / max(self.exp_failrate_max * self.num_groups, 1)
+            metrics["exp/failrate_threshold"] = float(self.exp_failrate)
+        if self.exp_curriculum and self._exp_cur_steps is not None:
+            metrics["exp/curriculum_steps"] = float(self._exp_cur_steps)
         # CARD-PB: MEASURED attack-FLOPs ratio (vs reactive all-norms-full) + φ error.
         if self.objective == "predictive_binding":
             metrics["pb/attack_flops_ratio"] = (

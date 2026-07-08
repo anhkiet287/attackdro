@@ -78,8 +78,13 @@ def _check_oscillation(x, j, k, y5, k3=0.75):
     return (t <= k * k3 * torch.ones_like(t)).float()
 
 
-def apgd_train(model, x, y, norm, eps, n_iter=10, is_train=True):
-    """APGD craft (ce loss). norm in {'Linf','L2','L1'}. Returns x_best (max-loss iterate)."""
+def apgd_train(model, x, y, norm, eps, n_iter=10, is_train=True, stop_frac=None):
+    """APGD craft (ce loss). norm in {'Linf','L2','L1'}. Returns x_best (max-loss iterate).
+
+    stop_frac (EXPLORATION, Idea 1 — off in all paper runs): if set, the whole batch's
+    attack halts once the fraction of samples ever-misclassified reaches stop_frac (a
+    batch-level fail-rate early-stop), and the function returns (x_best, steps_used). When
+    None (default) behaviour is byte-identical to the original and it returns x_best only."""
     device = x.device
     ndims = len(x.shape) - 1
     x_adv = x.clone().clamp(0., 1.)
@@ -128,6 +133,7 @@ def apgd_train(model, x, y, norm, eps, n_iter=10, is_train=True):
     u = torch.arange(x.shape[0], device=device)
     x_adv_old = x_adv.clone().detach()
 
+    steps_used = n_iter
     for i in range(n_iter):
         x_adv = x_adv.detach()
         grad2 = x_adv - x_adv_old
@@ -206,4 +212,12 @@ def apgd_train(model, x, y, norm, eps, n_iter=10, is_train=True):
                 grad[fl_redtopk] = grad_best[fl_redtopk].clone()
                 counter3 = 0
 
+        # EXPLORATION (Idea 1): batch-level fail-rate early-stop. `acc` = still-correct under
+        # the worst iterate so far, so (~acc).mean() = fraction ever-failed this batch.
+        if stop_frac is not None and (~acc).float().mean().item() >= stop_frac:
+            steps_used = i + 1
+            break
+
+    if stop_frac is not None:
+        return x_best, steps_used
     return x_best

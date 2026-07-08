@@ -1,0 +1,14 @@
+# EXPLORATION Idea 3 — curriculum: ramp attack steps over epochs (Colab, NOT paper-grade).
+# Reactive base, fixed per-norm allocation (NO predictor — isolates the curriculum effect).
+# Step count ramps by epoch: ep<10 -> 3, ep<20 -> 6, ep>=20 -> 10 (all norms). Compare to
+# idea3_control_fixed10 (same recipe, fixed 10/10/10 from the start). Read at ep30: does
+# curriculum reach comparable union/l1 with lower cumulative attack-FLOPs? l1 the key risk.
+_base_: configs/reactive_ramprecipe.yaml
+run_name: idea3_curriculum
+results_dir: results/exploration/
+wandb:
+  tags: ["exploration:true", "device:colab", "idea:3_curriculum"]
+train:
+  epochs: 30
+  groupdro:
+    curriculum: [[10, 3], [20, 6], [9999, 10]]   # [epoch_lt, steps]; first match wins, else last
