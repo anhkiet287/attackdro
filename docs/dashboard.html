@@ -230,7 +230,7 @@
 <body>
   <header>
     <h1>AttackDRO Dashboard</h1>
-    <p>Regenerated from <code>docs/PROJECT_STATE.md</code> and <code>results/*.json</code> (+ <code>run_status.json</code>) at 2026-07-08 01:28 UTC.</p>
+    <p>Regenerated from <code>docs/PROJECT_STATE.md</code> and <code>results/*.json</code> (+ <code>run_status.json</code>) at 2026-07-08 01:29 UTC.</p>
   </header>
   <main>
     <div class="status"><p><strong>Phase:</strong> Phase-1 launched → reactive ep50 exposed an <strong>l1-under-attack bug</strong> (train plain-PGD / eval APGD mismatch, +41.7pp l1 gap) → <strong>fixed: ported APGD training (P-10), verified</strong> (APGD-10 +11.6pp &gt; PGD-10; FLOPs counter OK; ~1.22× cost). <strong>Ready to re-run reactive → predictive with APGD — awaiting Kiet GO.</strong> Branch <code>card-pb-fixes</code>.</p>
@@ -242,6 +242,7 @@
 <li>[CC ✓] <strong>Eval convergence curve MEASURED (P-04, RAMP ep80, n=1000):</strong> l∞ plateaus @20, l2 @10-20, l1 @100 (l1@100=49.6=l1@200 49.5; l1@50=50.1 is 0.5pp short). *(My earlier n=500 &quot;l1@100=46.8=200&quot; was a subsample artifact — RETRACTED; first-500 images are harder.)* <strong>Screening budget SET = <code>20/20/100</code></strong> (base.yaml eval_attack) — reproduces 100/100/100 EXACTLY (union 46.0, Δ0.00) at ~53% fewer steps; l1-heavy = F1-safe. Curve in §6. <strong>On first reactive run:</strong> re-confirm plateaus (model-dependent) + l1 TRAINING step_size 0.10 strength.</li>
 <li>[Kiet/Colab] avg_frozen + 3a @our-recipe = <strong>SUPERSEDED</strong> (stopping); archive JSONs if they land.</li>
 <li>[CC ✓ / Kiet] <strong>PHASE-1 LAUNCHED</strong> (tmux <code>phase1</code>, RAMP recipe ep50 1-seed): reactive → predictive v2 (kspan=16) → <strong>DE-RISK STOP</strong> (does l1 hold after R1/R3/v2, or F9 again?). Verdict → <code>results/phase1_derisk.md</code>; first-run checks → <code>results/phase1_firstrun_checks.md</code>.</li>
+<li>[Kiet — PARKED, gated] <strong>Cross-attack consistency ablation</strong> (<code>docs/CONSISTENCY_ABLATION_PARKED.md</code>): <code>+consistency</code> row on the winning kspan (3-norm, APGD-l2 fixed-eps, FLOPs-accounted). Orthogonal lever (representation) to CARD-PB (allocation); do NOT implement. <strong>Gate: after frontier + seeds lock the efficiency claim.</strong></li>
 <li>[Kiet — conditional] <strong>Early-stop-attack idea scanned</strong> (<code>docs/EARLYSTOP_FEASIBILITY.md</code>): avoids the predictor (no F9 misprediction) BUT mechanism not novel (FAT/ATES, single-norm) and inherits the weak-example → l1-under-attack risk (our F1/F9 by another name); FLOPs saving decays late-training + batch-limited. <strong>Rec: stay with CARD-PB if de-risk holds; cheap pilot only if F9 recurs.</strong></li>
 </ul></div>
     <section>
@@ -298,6 +299,7 @@
 <li>[CC ✓] <strong>Eval convergence curve MEASURED (P-04, RAMP ep80, n=1000):</strong> l∞ plateaus @20, l2 @10-20, l1 @100 (l1@100=49.6=l1@200 49.5; l1@50=50.1 is 0.5pp short). *(My earlier n=500 &quot;l1@100=46.8=200&quot; was a subsample artifact — RETRACTED; first-500 images are harder.)* <strong>Screening budget SET = <code>20/20/100</code></strong> (base.yaml eval_attack) — reproduces 100/100/100 EXACTLY (union 46.0, Δ0.00) at ~53% fewer steps; l1-heavy = F1-safe. Curve in §6. <strong>On first reactive run:</strong> re-confirm plateaus (model-dependent) + l1 TRAINING step_size 0.10 strength.</li>
 <li>[Kiet/Colab] avg_frozen + 3a @our-recipe = <strong>SUPERSEDED</strong> (stopping); archive JSONs if they land.</li>
 <li>[CC ✓ / Kiet] <strong>PHASE-1 LAUNCHED</strong> (tmux <code>phase1</code>, RAMP recipe ep50 1-seed): reactive → predictive v2 (kspan=16) → <strong>DE-RISK STOP</strong> (does l1 hold after R1/R3/v2, or F9 again?). Verdict → <code>results/phase1_derisk.md</code>; first-run checks → <code>results/phase1_firstrun_checks.md</code>.</li>
+<li>[Kiet — PARKED, gated] <strong>Cross-attack consistency ablation</strong> (<code>docs/CONSISTENCY_ABLATION_PARKED.md</code>): <code>+consistency</code> row on the winning kspan (3-norm, APGD-l2 fixed-eps, FLOPs-accounted). Orthogonal lever (representation) to CARD-PB (allocation); do NOT implement. <strong>Gate: after frontier + seeds lock the efficiency claim.</strong></li>
 <li>[Kiet — conditional] <strong>Early-stop-attack idea scanned</strong> (<code>docs/EARLYSTOP_FEASIBILITY.md</code>): avoids the predictor (no F9 misprediction) BUT mechanism not novel (FAT/ATES, single-norm) and inherits the weak-example → l1-under-attack risk (our F1/F9 by another name); FLOPs saving decays late-training + batch-limited. <strong>Rec: stay with CARD-PB if de-risk holds; cheap pilot only if F9 recurs.</strong></li>
 </ul>
     </section>
