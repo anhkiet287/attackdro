@@ -58,12 +58,18 @@ ep_50 = 42.9** (same recipe, same pre-drop state — apples-to-apples).
 ## The table (filled as runs land)
 | method | recipe | train attack | epoch | union | linf/l2/l1 | FLOPs (pred) | seeds | role | comparator |
 |---|---|---|---|---|---|---|---|---|---|
-| reactive T=0.25 | RAMP | 10/10/10 | 50 | _P1_ | | 1.00 | 1 | develop | RAMP ep50 42.9 |
-| predictive CARD-PB v2 | RAMP | 10/10/10 | 50 | _P1_ | | _measured_ | 1 | develop | reactive P1 |
+| reactive T=0.25 | RAMP | APGD 10/10/10 | 50 | **38.8** | 39.2/60.1/45.6 | 1.00 | 1 | develop | RAMP ep50 42.9 |
+| predictive CARD-PB v2 (ks16) | RAMP | APGD 10/10/10 | 50 | **38.7** | 40.3/59.9/44.8 | **0.665** | 1 | develop | reactive P1 |
 | avg_frozen | RAMP | 10/10/10 | 50 | _P1 (Colab)_ | | — | 1 | develop | reactive P1 |
 | 3a | RAMP | 10/10/10 | 50 | _P1 (Colab)_ | | — | 1 | develop | reactive P1 |
 | β-ablation {0.3,0.5,0.8} | RAMP | 10/10/10 | 50 | _P1 if pred survives_ | | measured | 1 | develop | predictive P1 |
 | **winner** | RAMP | 10/10/10 | **80** | _P2_ | | | **3** | **final** | RAMP ep80 46.1 (full-AA) |
+
+**P1 LANDED (2026-07-08, 1 seed, APGD training).** l1 root cause FIXED: reactive l1 train-vs-eval gap
++41.7pp→**+11.3pp** (l∞/l2 level), l1 eval 30.7→**45.6** (RAMP 47.1), l1 now converges (APGD-100 45.6 =
+200 45.5). **De-risk POSITIVE:** predictive matches reactive union (Δunion **−0.10pp**, Δl1 **−0.80pp** →
+l1 HOLDS, NOT F9) at **0.665× attack-FLOPs**. FLOPs 0.665 > 0.60 target at ks16 → frontier sweep
+{8,16,24,32} to find the ≤0.60 point (**Kiet-gated**). 1 seed = FLOPs reliable / Δunion preliminary.
 
 ## REFERENCE (kept — recipe-independent comparators)
 | id | method | union | clean | linf/l2/l1 | source | note |

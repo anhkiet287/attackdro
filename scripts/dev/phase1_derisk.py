@@ -39,8 +39,8 @@ def _pb_stats(run):
 
 
 def main():
-    r, p = _ev("reactive_T025_8255"), _ev("predictive_pb_8255")
-    pb = _pb_stats("predictive_pb_8255")
+    r, p = _ev("reactive_apgd_8255"), _ev("predictive_apgd_8255")
+    pb = _pb_stats("predictive_apgd_8255")
     L = ["# PHASE-1 de-risk — reactive vs predictive CARD-PB v2 @ ep50 (RAMP recipe, 1 seed, screening 20/20/100)", ""]
     if not r or not p:
         L += [f"⚠ INCOMPLETE — reactive:{bool(r)} predictive:{bool(p)}. Re-run.", ""]
