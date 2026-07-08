@@ -53,12 +53,13 @@ PATCHES = [
      "\n"
      "                    x_tr_t, _, _, loss_best_t, _ = apgd_train(model, x, y, norm=args.l_norms[cur_norm_target],\n"
      "                                eps=args.l_eps[cur_norm_target], n_iter=args.l_iters[cur_norm_target], is_train=True)\n",
+     "                    _pred = _phi.predict(idx, epoch)   # ONCE per batch (shared by both crafts)\n"
      "                    x_tr_s, loss_best_s, _ps = _pa.alloc_craft(model, x, y, idx, 0,\n"
      "                                args.l_norms[cur_norm_source], args.l_eps[cur_norm_source],\n"
-     "                                args.l_iters[cur_norm_source], _phi, epoch)\n"
+     "                                args.l_iters[cur_norm_source], _phi, _pred)\n"
      "                    x_tr_t, loss_best_t, _pt = _pa.alloc_craft(model, x, y, idx, 1,\n"
      "                                args.l_norms[cur_norm_target], args.l_eps[cur_norm_target],\n"
-     "                                args.l_iters[cur_norm_target], _phi, epoch)\n"
+     "                                args.l_iters[cur_norm_target], _phi, _pred)\n"
      "                    _alloc_passes += _ps + _pt\n"
      "                    _alloc_ref += (args.l_iters[cur_norm_source] + args.l_iters[cur_norm_target]) * len(y)\n"),
 
