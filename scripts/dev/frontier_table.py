@@ -17,9 +17,11 @@ DUNION_NOISE = -1.0   # 1pp seed-noise band (selection rule)
 DL1_HOLD = -2.0
 FLOPS_TARGET = 0.60
 
-# kspan -> run name (ks16 = the de-risk run already on disk)
-ARMS = {8: "predictive_ks8_apgd_8255", 16: "predictive_apgd_8255",
-        24: "predictive_ks24_apgd_8255", 32: "predictive_ks32_apgd_8255"}
+# kspan -> run name (ks16 = the de-risk run already on disk). Range {2,4,8,16,24} (P-quickcheck:
+# dropped ks32 redundant, added ks2/ks4 downward where the <=0.60 point + l1-floor threshold live).
+ARMS = {2: "predictive_ks2_apgd_8255", 4: "predictive_ks4_apgd_8255",
+        8: "predictive_ks8_apgd_8255", 16: "predictive_apgd_8255",
+        24: "predictive_ks24_apgd_8255"}
 REACT = "reactive_apgd_8255"
 
 
@@ -65,7 +67,7 @@ def main():
                      "du": ev["union"] - react["union"], "dl1": ev["l1"] - react["l1"],
                      "flops": pb.get("flops")})
 
-    L = ["# PHASE-1 frontier sweep — CARD-PB v2 kspan ∈ {8,16,24,32} @ ep50 (RAMP recipe, APGD, 1 seed, screening 20/20/100)",
+    L = ["# PHASE-1 frontier sweep — CARD-PB v2 kspan ∈ {2,4,8,16,24} @ ep50 (RAMP recipe, APGD, 1 seed, screening 20/20/100)",
          "",
          f"Reactive ref (ks n/a): union **{react['union']:.1f}**, l1 **{react['l1']:.1f}**, clean {react['clean']:.1f}, FLOPs 1.00 (30-step denom).",
          f"RAMP ep50 ref: union {RAMP50}.", "",
