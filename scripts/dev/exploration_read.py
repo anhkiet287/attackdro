@@ -47,7 +47,7 @@ def idea1():
         L += ["⚠ INCOMPLETE — run idea1_failrate first."]; w("idea1_failrate.md", L); return ("Idea 1", "INCOMPLETE", "")
     last = h[-1]
     steps = {n: last.get(f"exp/steps_{n}") for n in ("linf", "l2", "l1")}
-    flops = last.get("exp/attack_flops_ratio")
+    flops = last.get("efficiency/attack_flops_ratio", last.get("exp/attack_flops_ratio"))
     tr_l1 = 100 * last.get("train/adv_acc_l1", 0)
     gap = tr_l1 - ev["l1"]
     L += [f"- **steps the threshold self-selected** (final epoch): l∞ {steps['linf']:.1f} · l2 {steps['l2']:.1f} · l1 {steps['l1']:.1f}",

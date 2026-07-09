@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 """PHASE-1 de-risk read: reactive vs predictive CARD-PB v2 @ ep50, RAMP recipe, 1 seed.
 The critical question after the R1/R3/v2 fixes: does l1 HOLD, or is this F9 again?
-Reads the nested eval.json + train.json, writes results/phase1_derisk.md."""
+Reads the nested eval.json + train.json, writes results/reports/phase1_derisk.md."""
 import json
 import os
 
 ROOT = "/mnt/c/Users/ADMIN/Documents/Claude/Projects/ATTACKDRO"
+REPORTS = f"{ROOT}/results/reports"
 COLD = 5
 RAMP50 = 42.9  # matched pre-drop budget comparator
 
@@ -30,7 +31,11 @@ def _pb_stats(run):
     if not d:
         return {}
     h = d.get("history", [])
-    post = [e["pb/attack_flops_ratio"] for e in h if e.get("epoch", 0) >= COLD and "pb/attack_flops_ratio" in e]
+    post = [e["efficiency/attack_flops_ratio"] for e in h
+            if e.get("epoch", 0) >= COLD and "efficiency/attack_flops_ratio" in e]
+    if not post:
+        post = [e["pb/attack_flops_ratio"] for e in h
+                if e.get("epoch", 0) >= COLD and "pb/attack_flops_ratio" in e]
     last = h[-1] if h else {}
     return {"flops": (sum(post) / len(post)) if post else None,
             "floor": {n: last.get(f"floor/{n}") for n in ("linf", "l2", "l1")},
@@ -67,7 +72,7 @@ def main():
     if l1_holds and union_ok:
         L.append(f"**l1 HOLDS — the R1/R3/v2 fixes worked** (Δl1 {dl1:+.2f} ≥ −2pp, Δunion {du:+.2f} ≥ −0.5). "
                  f"NOT F9 again. " + (f"FLOPs {flops:.3f} ≤ 0.60 → efficiency signal → **proceed to the "
-                 f"{{8,16,24,32}} frontier sweep + β-ablation** (Kiet GO)." if flops_ok else
+                 f"{{2,4,8,16,24}} frontier sweep + beta-ablation** (Kiet GO)." if flops_ok else
                  f"FLOPs {flops:.3f} > 0.60 at this kspan → run the frontier sweep to find the ≤0.60 point (Kiet GO)."))
     else:
         why = []
@@ -85,7 +90,8 @@ def main():
 
 
 def _w(lines):
-    open(os.path.join(ROOT, "results/phase1_derisk.md"), "w").write("\n".join(lines) + "\n")
+    os.makedirs(REPORTS, exist_ok=True)
+    open(os.path.join(REPORTS, "phase1_derisk.md"), "w").write("\n".join(lines) + "\n")
 
 
 if __name__ == "__main__":

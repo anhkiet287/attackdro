@@ -6,11 +6,12 @@ Pre-registered read (unchanged from de-risk):
   If ks8 hits <=0.60 AND l1 holds -> conditional efficiency win (operating point).
   If NO arm gets both l1-hold AND <=0.60 -> floors-finding: 'l1 predictability floors
     efficiency at ~min-FLOPs-with-l1-hold' (the curve IS the result).
-Runs incrementally: only tabulates arms whose eval.json exists. Writes results/frontier_sweep.md."""
+Runs incrementally: only tabulates arms whose eval.json exists. Writes results/reports/frontier_sweep.md."""
 import json
 import os
 
 ROOT = "/mnt/c/Users/ADMIN/Documents/Claude/Projects/ATTACKDRO"
+REPORTS = f"{ROOT}/results/reports"
 COLD = 5
 RAMP50 = 42.9
 DUNION_NOISE = -1.0   # 1pp seed-noise band (selection rule)
@@ -45,7 +46,11 @@ def _pb(run):
     if not d:
         return {}
     h = d.get("history", [])
-    post = [e["pb/attack_flops_ratio"] for e in h if e.get("epoch", 0) >= COLD and "pb/attack_flops_ratio" in e]
+    post = [e["efficiency/attack_flops_ratio"] for e in h
+            if e.get("epoch", 0) >= COLD and "efficiency/attack_flops_ratio" in e]
+    if not post:
+        post = [e["pb/attack_flops_ratio"] for e in h
+                if e.get("epoch", 0) >= COLD and "pb/attack_flops_ratio" in e]
     last = h[-1] if h else {}
     return {"flops": (sum(post) / len(post)) if post else None,
             "floor": {n: last.get(f"floor/{n}") for n in ("linf", "l2", "l1")},
@@ -55,7 +60,8 @@ def _pb(run):
 def main():
     react = _ev(REACT)
     if not react:
-        open(f"{ROOT}/results/frontier_sweep.md", "w").write("⚠ reactive_apgd_8255 eval missing.\n")
+        os.makedirs(REPORTS, exist_ok=True)
+        open(f"{REPORTS}/frontier_sweep.md", "w").write("⚠ reactive_apgd_8255 eval missing.\n")
         print("NO REACTIVE"); return
     rows = []
     for ks in sorted(ARMS):
@@ -112,7 +118,8 @@ def main():
         L.append("*(incomplete — waiting on remaining arms before firing the outcome.)*")
         print("FRONTIER INCOMPLETE")
     L.append("")
-    open(f"{ROOT}/results/frontier_sweep.md", "w").write("\n".join(L) + "\n")
+    os.makedirs(REPORTS, exist_ok=True)
+    open(f"{REPORTS}/frontier_sweep.md", "w").write("\n".join(L) + "\n")
 
 
 if __name__ == "__main__":

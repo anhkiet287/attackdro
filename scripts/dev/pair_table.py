@@ -2,7 +2,7 @@
 """Growing 3-seed table for the reactive-vs-predictive @8/255 pair.
 
 Scans whatever seed eval JSONs exist and (re)writes
-results/reactive_vs_predictive_3seed.md with per-seed unions + mean±std +
+results/reports/reactive_vs_predictive_3seed.md with per-seed unions + mean±std +
 per-norm means + measured attack-FLOPs, all vs RAMP repro 46.1. Idempotent —
 the chain re-runs it after every seed pair lands, so the file always reflects
 current reality even if later seeds are mid-run.
@@ -41,8 +41,11 @@ def _flops(seed):
     tj = _load(f"results/predictive_pb_8255_s{seed}.json")
     if not tj:
         return None
-    post = [h["pb/attack_flops_ratio"] for h in tj.get("history", [])
-            if h.get("epoch", 0) >= 5 and "pb/attack_flops_ratio" in h]
+    post = [h["efficiency/attack_flops_ratio"] for h in tj.get("history", [])
+            if h.get("epoch", 0) >= 5 and "efficiency/attack_flops_ratio" in h]
+    if not post:
+        post = [h["pb/attack_flops_ratio"] for h in tj.get("history", [])
+                if h.get("epoch", 0) >= 5 and "pb/attack_flops_ratio" in h]
     return (sum(post) / len(post)) if post else None
 
 
@@ -104,7 +107,8 @@ def main():
              + "reactive " + ", ".join(f"s{s}={_fmt(_union(react[s]))}" for s in SEEDS)
              + " · predictive " + ", ".join(f"s{s}={_fmt(_union(pred[s]))}" for s in SEEDS))
 
-    out = os.path.join(ROOT, "results/reactive_vs_predictive_3seed.md")
+    out = os.path.join(ROOT, "results/reports/reactive_vs_predictive_3seed.md")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as f:
         f.write("\n".join(L) + "\n")
     print(f"[pair_table] wrote {out} (reactive n={ru[2]}, predictive n={pu[2]})")

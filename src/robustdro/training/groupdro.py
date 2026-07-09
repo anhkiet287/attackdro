@@ -36,6 +36,7 @@ class GroupDROTrainer:
         self.device = cfg["device"] if torch.cuda.is_available() else "cpu"
         if self.device != cfg["device"]:
             print(f"[trainer] CUDA unavailable — falling back to {self.device}")
+        self.logger = WandbLogger(cfg, run_name=cfg.get("run_name"))
 
         if loaders is not None:
             self.train_loader, self.test_loader = loaders
@@ -63,6 +64,7 @@ class GroupDROTrainer:
         # for predictive the floor attacks use it too (see _rebuild_floor).
         self.train_attack = tcfg.get("attack", "pgd")
         self.group_norms = [s["norm"].lower() for s in self.attack_specs]
+        self.full_attack_steps = [int(s.get("steps", 10)) for s in self.attack_specs]
         self.attacks = [build_source_attack(s, eps=tm[s["norm"].lower()]["eps"], attack=self.train_attack)
                         for s in self.attack_specs]
         self.num_groups = len(self.attacks)
@@ -135,10 +137,9 @@ class GroupDROTrainer:
             self.pb_cold_epochs = int(gcfg.get("pb_cold_epochs", 5))
             self.pb_recal_every = int(gcfg.get("pb_recal_every", 0))  # >0 => full-reactive epoch every N
             self.pb_guard_pp = float(gcfg.get("pb_guard_pp", 3.0))
-            # CARD-PB v2 (Option B): predictability-aware floor. In "confidence" mode the
-            # per-norm floor is floor_g = clamp(k_min + round(kspan*miss_ema_g), k_min,
-            # full_g), miss_g = 1 - recall_g measured UNBIASED on the recal subset (NOT the
-            # probe — the l1 probe is the weakest attack, F1). "fixed" = the v1 constant.
+            # CARD-PB v2: predictability-aware floor. In "confidence" mode the
+            # per-norm floor is driven by miss volume, P(true_bind=g and b_hat!=g),
+            # measured unbiased on the recal subset. "fixed" = the v1 constant.
             self.pb_floor_mode = gcfg.get("pb_floor_mode", "fixed")   # fixed | confidence
             self.pb_floor_kspan = int(gcfg.get("pb_floor_kspan", 12))
             self.pb_floor_ema = float(gcfg.get("pb_floor_ema", 0.5))  # smooth the ~12-sample/batch miss (R5)
@@ -146,10 +147,10 @@ class GroupDROTrainer:
             # mode by default — it double-counts with the confidence floor and is probe-blind
             # on l1 (F1), which inflated FLOPs in sweep-1 (linf pushed to full). Overridable.
             self.pb_adaptive = bool(gcfg.get("pb_adaptive_floor", self.pb_floor_mode != "confidence"))
-            self._full_steps = [int(s.get("steps", 10)) for s in self.attack_specs]
+            self._full_steps = list(self.full_attack_steps)
             self._pb_extra_floor = [0 for _ in self.attack_specs]   # adaptive-guard bumps, ON TOP of the base floor
             self._pb_conf_floor = [self.pb_k_floor for _ in self.attack_specs]  # confidence base (>= k_min)
-            self._pb_miss_ema = [None for _ in self.attack_specs]   # per-norm 1-recall EMA
+            self._pb_miss_ema = [None for _ in self.attack_specs]   # per-norm miss-volume EMA
             # R1: floor attacks are (re)built from the CURRENT effective step count so a
             # raised floor runs MORE steps, not just logs a higher number.
             self.floor_attacks = [None] * len(self.attack_specs)
@@ -174,7 +175,6 @@ class GroupDROTrainer:
         self._exp_cur_steps = None
 
         self.criterion = nn.CrossEntropyLoss()
-        self.logger = WandbLogger(cfg, run_name=cfg.get("run_name"))
         # Per-run results layout: results/<run>/s<seed>/{train,smoke}.json + ckpt/ .
         # Root = cfg.results_dir (default results/; Colab overrides to Drive). Checkpoints
         # nest under the run (checkpoints_dir is no longer used).
@@ -214,10 +214,10 @@ class GroupDROTrainer:
             spec, eps=self.cfg["threat_model"][spec["norm"].lower()]["eps"], attack=self.train_attack)
 
     def _recompute_conf_floor(self) -> None:
-        """v2 Option B: set each norm's confidence floor from its measured miss rate
-        (1 - recall on the recal subset): floor_g = clamp(k_min + round(kspan*miss_ema_g),
-        k_min, full_g). Norms φ predicts poorly (l1) get a higher floor automatically;
-        norms it nails (linf) or that few samples bind (l2) stay near k_min. Rebuilds the
+        """Set each norm's confidence floor from its measured miss volume:
+        floor_g = clamp(k_min + round(kspan*miss_vol_ema_g), k_min, full_g).
+        Norms that are both frequently true-binding and often missed get a higher floor;
+        rare/free norms stay near k_min. Rebuilds the
         floor attack so the change is physical (R1). No-op outside confidence mode."""
         if self.pb_floor_mode != "confidence":
             return
@@ -312,9 +312,10 @@ class GroupDROTrainer:
         self.pb_Lbar[idx] = torch.where(full_mask, updated, Lbar_b)
         self.pb_seen[idx] = True
 
-        # Misprediction on the recalibration subset (unbiased: full in all norms). Aggregate
-        # rate p AND per-norm miss = 1 - recall_g = P(b_hat != g | true == g), which drives
-        # the v2 confidence floor (norms φ misses most get more floor).
+        # Misprediction on the recalibration subset (unbiased: full in all norms).
+        # Aggregate rate p plus per-norm counts. The floor uses population-aware
+        # miss volume P(true_bind=g and b_hat!=g); conditional miss rate is logged
+        # only as a diagnostic.
         if recal.any():
             true_bind = newL[recal].argmax(dim=1)
             bh = b_hat[recal]
@@ -507,7 +508,7 @@ class GroupDROTrainer:
             fr = [self._exp_steps_sum[g] / max(n_batches, 1) for g in range(self.num_groups)]
             for g, norm in enumerate(self.group_norms):
                 metrics[f"exp/steps_{norm}"] = fr[g]
-            metrics["exp/attack_flops_ratio"] = sum(fr) / max(self.exp_failrate_max * self.num_groups, 1)
+            metrics["exp/attack_flops_ratio"] = sum(fr) / max(sum(self.full_attack_steps), 1)
             metrics["exp/failrate_threshold"] = float(self.exp_failrate)
         if self.exp_curriculum and self._exp_cur_steps is not None:
             metrics["exp/curriculum_steps"] = float(self._exp_cur_steps)
@@ -518,16 +519,18 @@ class GroupDROTrainer:
             metrics["pb/attack_passes"] = float(self._pb_attack_passes)
             if self._pb_mis_den:
                 metrics["phi/misprediction_rate"] = self._pb_mis_num / self._pb_mis_den
+            else:
+                metrics["phi/misprediction_rate"] = 0.0
             metrics["pb/beta"] = self.pb_beta        # EMA horizon (comparability across β-ablation)
             metrics["pb/floor_mode"] = self.pb_floor_mode
             metrics["pb/floor_kspan"] = self.pb_floor_kspan
             for g, norm in enumerate(self.group_norms):
                 # v2 FIX (sweep-1 was confounded): drive the floor by miss VOLUME =
                 # P(true=g AND b_hat!=g) — the joint, POPULATION-aware probability over ALL
-                # recal samples — not 1-recall (conditional). A rarely-bound norm (l2, free
+                # recal samples, not the conditional miss rate. A rarely-bound norm (l2, free
                 # per F3) then can't get a high floor just because its few true samples are
                 # mispredicted; only norms that are BOTH frequently bound AND often missed
-                # (l1) earn a high floor. EMA-smoothed (R5). 1-recall still logged for diag.
+                # (l1) earn a high floor. EMA-smoothed (R5). Conditional miss rate is diagnostic.
                 if self._pb_mis_den:
                     vol = self._pb_missn[g] / self._pb_mis_den
                     self._pb_miss_ema[g] = (vol if self._pb_miss_ema[g] is None
@@ -535,9 +538,25 @@ class GroupDROTrainer:
                                             + (1 - self.pb_floor_ema) * self._pb_miss_ema[g])
                 if self._pb_miss_ema[g] is not None:
                     metrics[f"phi/miss_vol_{norm}"] = self._pb_miss_ema[g]     # the floor DRIVER
-                if self._pb_missd[g]:
-                    metrics[f"phi/miss_rate_{norm}"] = self._pb_missn[g] / self._pb_missd[g]  # 1-recall (diag)
+                elif self._pb_mis_den:
+                    metrics[f"phi/miss_vol_{norm}"] = 0.0
+                if self._pb_mis_den:
+                    metrics[f"phi/miss_rate_{norm}"] = (
+                        self._pb_missn[g] / self._pb_missd[g] if self._pb_missd[g] else 0.0
+                    )  # conditional miss diagnostic
                 metrics[f"floor/{norm}"] = self._floor_steps(g)
+        # Canonical comparable attack-FLOPs key for every method. Method-specific keys are
+        # retained above for old parsers, but dashboards/tables should read this alias.
+        if "pb/attack_flops_ratio" in metrics:
+            metrics["efficiency/attack_flops_ratio"] = metrics["pb/attack_flops_ratio"]
+        elif "exp/attack_flops_ratio" in metrics:
+            metrics["efficiency/attack_flops_ratio"] = metrics["exp/attack_flops_ratio"]
+        elif self.exp_curriculum and self._exp_cur_steps is not None:
+            metrics["efficiency/attack_flops_ratio"] = (
+                self._exp_cur_steps * self.num_groups / max(sum(self.full_attack_steps), 1)
+            )
+        else:
+            metrics["efficiency/attack_flops_ratio"] = 1.0
         return metrics
 
     def _probe_norm(self, norm: str) -> torch.Tensor:

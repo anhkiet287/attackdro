@@ -3,8 +3,9 @@
 Design goals (per the author's request — "set it up so I can reuse it simply"):
   * One class, `WandbLogger`, used by every script the same way.
   * Fully config-driven: project / entity / mode come from cfg['wandb'].
-  * Never crashes a run: if wandb is missing or you are not logged in, it
-    degrades to stdout-only instead of raising.
+  * For ordinary dev use, explicit `mode: disabled` still keeps training local.
+    For controlled runs with `wandb.required: true`, online/offline init failure
+    is fatal so a run cannot silently lose W&B metrics.
   * Three modes, controlled by cfg['wandb']['mode']:
       - "online"   : log to wandb.ai (requires `wandb login` once, see SETUP).
       - "offline"  : log locally to wandb/ ; sync later with `wandb sync`.
@@ -76,14 +77,20 @@ class WandbLogger:
         wcfg = (cfg or {}).get("wandb", {}) or {}
         # Env var wins over config so you can force a mode per-invocation.
         self.mode = os.environ.get("WANDB_MODE", wcfg.get("mode", "online"))
+        self.required = bool(wcfg.get("required", False))
         self.run = None
         self._printed_header = False
 
         if not _HAS_WANDB:
-            print("[wandb] package not installed — logging to stdout only.")
+            msg = "[wandb] package not installed"
+            if self.required:
+                raise RuntimeError(f"{msg}; wandb.required=true so this run must stop.")
+            print(f"{msg} — logging to stdout only.")
             self.mode = "disabled"
             return
         if self.mode == "disabled":
+            if self.required:
+                raise RuntimeError("[wandb] mode=disabled but wandb.required=true; refusing to run.")
             print("[wandb] mode=disabled — logging to stdout only.")
             return
 
@@ -103,6 +110,11 @@ class WandbLogger:
             print(f"[wandb] initialized (mode={self.mode}) project={wcfg.get('project', _PROJECT_DEFAULT)} "
                   f"run={self.run.name} tags={_auto_tags(cfg, name)}")
         except Exception as e:  # not logged in, offline network, etc.
+            if self.required:
+                raise RuntimeError(
+                    f"[wandb] init failed in mode={self.mode}: {e}. "
+                    "Use online W&B, or set wandb.mode=offline and sync later."
+                ) from e
             print(f"[wandb] init failed ({e}); falling back to stdout only.")
             print("[wandb] tip: run `.venv/bin/wandb login` once to enable online logging.")
             self.run = None
@@ -133,11 +145,13 @@ class WandbLogger:
 
 
 def log_eval_summary(cfg: dict, run_name: str, metrics: dict, *, version: str,
-                     tier: str | None = None, n_examples: int | None = None) -> bool:
+                     tier: str | None = None, n_examples: int | None = None,
+                     checkpoint: str | None = None, seed: int | None = None) -> bool:
     """Attach a harness eval_union result to W&B as SUMMARY metrics on the run
     named `run_name` (resumes the training run via its deterministic id, so
-    training curves AND final eval live in one place). Best-effort: never raises,
-    returns True iff it logged. Honors WANDB_MODE / cfg['wandb']['mode'].
+    training curves AND final eval live in one place). Returns True iff it logged.
+    For cfg['wandb']['required']=true, any online/offline init failure raises.
+    Honors WANDB_MODE / cfg['wandb']['mode'].
 
     metrics is the eval_union dict: clean_acc, per_norm_robust_acc{linf,l2,l1},
     avg_robust_acc, worst_union_acc. JSON on disk stays the source of truth; this
@@ -145,12 +159,28 @@ def log_eval_summary(cfg: dict, run_name: str, metrics: dict, *, version: str,
     """
     wcfg = (cfg or {}).get("wandb", {}) or {}
     mode = os.environ.get("WANDB_MODE", wcfg.get("mode", "online"))
-    if not _HAS_WANDB or mode == "disabled":
+    required = bool(wcfg.get("required", False))
+    if not _HAS_WANDB:
+        if required:
+            raise RuntimeError("[wandb] package not installed; eval W&B logging is required.")
+        return False
+    if mode == "disabled":
+        if required:
+            raise RuntimeError("[wandb] mode=disabled but eval W&B logging is required.")
         return False
     tier = tier or wcfg.get("tier")
     tags = _auto_tags(cfg, run_name) + [f"eval:{version}"]
     per_norm = metrics.get("per_norm_robust_acc", {}) or {}
     summary = {
+        # Canonical eval summary keys.
+        "eval/checkpoint": checkpoint,
+        "eval/clean_acc": metrics.get("clean_acc"),
+        "eval/worst_union": metrics.get("worst_union_acc"),
+        "eval/attack_linf_steps": (cfg.get("eval_attack", {}).get("linf", {}) or {}).get("steps"),
+        "eval/attack_l2_steps": (cfg.get("eval_attack", {}).get("l2", {}) or {}).get("steps"),
+        "eval/attack_l1_steps": (cfg.get("eval_attack", {}).get("l1", {}) or {}).get("steps"),
+        "eval/seed": seed,
+        # Backward-compatible aliases used by older views.
         "eval/union": metrics.get("worst_union_acc"),
         "eval/clean": metrics.get("clean_acc"),
         "eval/avg": metrics.get("avg_robust_acc"),
@@ -160,7 +190,10 @@ def log_eval_summary(cfg: dict, run_name: str, metrics: dict, *, version: str,
     }
     for norm in ("linf", "l2", "l1"):
         if norm in per_norm:
+            summary[f"eval/robust_{norm}"] = per_norm[norm]
             summary[f"eval/{norm}"] = per_norm[norm]
+    if "efficiency/attack_flops_ratio" in metrics:
+        summary["efficiency/attack_flops_ratio"] = metrics["efficiency/attack_flops_ratio"]
     try:
         run = wandb.init(project=wcfg.get("project", _PROJECT_DEFAULT),
                          entity=wcfg.get("entity") or None,
@@ -169,8 +202,10 @@ def log_eval_summary(cfg: dict, run_name: str, metrics: dict, *, version: str,
         run.summary.update({k: v for k, v in summary.items() if v is not None})
         run.finish()
         print(f"[wandb] eval summary logged to run={run_name} "
-              f"(union={summary['eval/union']}, version={version}, tier={tier})")
+              f"(union={summary['eval/worst_union']}, version={version}, tier={tier})")
         return True
     except Exception as e:  # pragma: no cover
+        if required:
+            raise RuntimeError(f"[wandb] eval summary log failed: {e}") from e
         print(f"[wandb] eval summary log failed ({e}); JSON on disk is unaffected.")
         return False

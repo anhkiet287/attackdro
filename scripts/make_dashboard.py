@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Build the self-contained docs/dashboard.html from project docs and results."""
+"""Build docs/dashboard.html from PROJECT_STATE plus result JSON files."""
 
 from __future__ import annotations
 
 import json
 import re
-import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from html import escape
@@ -17,8 +16,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 RESULTS = ROOT / "results"
-STATE = DOCS / "PROJECT_STATE.md"          # consolidated sync surface (was MEMORY.md + LOG.md)
-LOG = DOCS / "legacy" / "LOG.md"           # retired; still read for the timeline history
+STATE = DOCS / "PROJECT_STATE.md"
 OUT = DOCS / "dashboard.html"
 
 
@@ -54,6 +52,13 @@ def fmt_percent(value: Any) -> str:
     return f"{number:.1f}"
 
 
+def fmt_flops(value: Any) -> str:
+    try:
+        return f"{float(value):.3f}"
+    except (TypeError, ValueError):
+        return "—"
+
+
 def baseline_metric(value: Any) -> float | None:
     if value is None:
         return None
@@ -71,6 +76,7 @@ class ResultRow:
     l2: Any
     l1: Any
     union: Any
+    flops: Any
     n: Any
     version: str
     source: str
@@ -108,9 +114,48 @@ def eps_flag(payload: dict) -> str:
     return ""
 
 
+def norm_value(metrics: dict, per_norm: dict, norm: str) -> Any:
+    keys = [f"eval/robust_{norm}", f"robust_{norm}", norm]
+    if norm == "linf":
+        keys.append("l_inf")
+    value = pick(metrics, *keys)
+    if value is not None:
+        return value
+    return pick(per_norm, norm, "l_inf") if per_norm else None
+
+
+def train_flops_for_eval(path: Path) -> float | None:
+    """Final train-time FLOPs ratio beside results/<run>/s<seed>/eval.json.
+
+    Do not invent a reactive/RAMP value: if no train.json key exists, return None.
+    """
+    train_path = path.parent / "train.json"
+    if not train_path.exists():
+        return None
+    try:
+        payload = json.loads(train_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    history = payload.get("history") or []
+    for row in reversed(history):
+        value = pick(
+            row,
+            "efficiency/attack_flops_ratio",
+            "pb/attack_flops_ratio",
+            "exp/attack_flops_ratio",
+        )
+        if value is not None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
 def load_results() -> list[ResultRow]:
     rows: list[ResultRow] = []
-    for path in sorted(RESULTS.glob("*.json")):
+    json_paths = sorted(RESULTS.glob("*.json")) + sorted((RESULTS / "ramp").glob("*.json"))
+    for path in json_paths:
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
@@ -134,9 +179,10 @@ def load_results() -> list[ResultRow]:
                         l2=baseline_metric(pick(item, "l2")),
                         l1=baseline_metric(pick(item, "l1")),
                         union=baseline_metric(pick(item, "union", "worst_union", "worst_union_acc")),
+                        flops=None,
                         n=protocol.get("n_examples", ""),
                         version=str(protocol.get("version", "")),
-                        source=path.name,
+                        source=str(path.relative_to(RESULTS)),
                         tier="official",
                         eps=eps_label(payload),
                     )
@@ -148,7 +194,7 @@ def load_results() -> list[ResultRow]:
         metrics = payload.get("metrics", {})
         if not isinstance(metrics, dict):
             continue
-        union = pick(metrics, "worst_union_acc", "worst_union")
+        union = pick(metrics, "eval/worst_union", "worst_union_acc", "worst_union")
         if union is None:
             continue
         per_norm = metrics.get("per_norm_robust_acc", {})
@@ -158,14 +204,15 @@ def load_results() -> list[ResultRow]:
         rows.append(
             ResultRow(
                 name=name,
-                clean=pick(metrics, "clean_acc", "clean"),
-                linf=pick(per_norm, "linf", "l_inf") if per_norm else pick(metrics, "linf", "l_inf"),
-                l2=pick(per_norm, "l2") if per_norm else pick(metrics, "l2"),
-                l1=pick(per_norm, "l1") if per_norm else pick(metrics, "l1"),
+                clean=pick(metrics, "eval/clean_acc", "clean_acc", "clean"),
+                linf=norm_value(metrics, per_norm, "linf"),
+                l2=norm_value(metrics, per_norm, "l2"),
+                l1=norm_value(metrics, per_norm, "l1"),
                 union=union,
+                flops=pick(metrics, "efficiency/attack_flops_ratio"),
                 n=pick(metrics, "n", "n_examples") or payload.get("n_examples", ""),
                 version=str(metrics.get("version", payload.get("version", ""))),
-                source=path.name,
+                source=str(path.relative_to(RESULTS)),
                 tier=infer_tier(name, path.name),
                 eps=eps_label(payload),
                 flag=eps_flag(payload),
@@ -182,7 +229,7 @@ def load_results() -> list[ResultRow]:
         metrics = payload.get("metrics", payload)
         if not isinstance(metrics, dict):
             continue
-        union = pick(metrics, "worst_union_acc", "worst_union")
+        union = pick(metrics, "eval/worst_union", "worst_union_acc", "worst_union")
         if union is None:
             continue
         per_norm = metrics.get("per_norm_robust_acc", {}) or {}
@@ -193,11 +240,12 @@ def load_results() -> list[ResultRow]:
         rows.append(
             ResultRow(
                 name=name,
-                clean=pick(metrics, "clean_acc", "clean"),
-                linf=pick(per_norm, "linf", "l_inf") if per_norm else pick(metrics, "linf"),
-                l2=pick(per_norm, "l2") if per_norm else pick(metrics, "l2"),
-                l1=pick(per_norm, "l1") if per_norm else pick(metrics, "l1"),
+                clean=pick(metrics, "eval/clean_acc", "clean_acc", "clean"),
+                linf=norm_value(metrics, per_norm, "linf"),
+                l2=norm_value(metrics, per_norm, "l2"),
+                l1=norm_value(metrics, per_norm, "l1"),
                 union=union,
+                flops=pick(metrics, "efficiency/attack_flops_ratio") or train_flops_for_eval(path),
                 n=pick(metrics, "n", "n_examples") or payload.get("n_examples", ""),
                 version=str(metrics.get("version", payload.get("version", ""))),
                 source=str(path.relative_to(RESULTS)),
@@ -307,7 +355,7 @@ def extract_section(markdown: str, title: str) -> str:
 
 
 def status_cards(memory_md: str) -> str:
-    phase = extract_section_like(memory_md, "CURRENT PHASE")
+    phase = extract_section_like(memory_md, "Current Next Action")
     candidates = {
         "Phase": "",
         "Gate": "",
@@ -385,6 +433,7 @@ def results_table(rows: list[ResultRow]) -> str:
             f"<td>{fmt_percent(row.l2)}</td>"
             f"<td>{fmt_percent(row.l1)}</td>"
             f"<td><strong>{fmt_percent(row.union)}</strong></td>"
+            f"<td>{fmt_flops(row.flops)}</td>"
             f"<td>{escape(row.tier)}</td>"
             f"<td>{escape(row.eps)}</td>"
             f"<td>{('⚠ ' + escape(row.flag)) if row.flag else ''}</td>"
@@ -396,216 +445,11 @@ def results_table(rows: list[ResultRow]) -> str:
     return (
         "<div class=\"table-wrap\"><table><thead><tr>"
         "<th>Run</th><th>Clean</th><th>linf</th><th>l2</th><th>l1</th>"
-        "<th>Union</th><th>Tier</th><th>eps</th><th>Flag</th><th>n</th><th>Version</th><th>Source</th>"
+        "<th>Union</th><th>FLOPs</th><th>Tier</th><th>eps</th><th>Flag</th><th>n</th><th>Version</th><th>Source</th>"
         "</tr></thead><tbody>"
         + "".join(body)
         + "</tbody></table></div>"
     )
-
-
-# ---- Experiment status view (parsed from results/run_status.json + live tmux) ----
-# run_status.json holds the STATUS STRUCTURE (what is running/done/planned); this
-# generator holds no facts of its own. Robustness NUMBERS for done rows are pulled
-# live from results/*.json via each item's optional `result` key, so they can never
-# drift. RUNNING rows are cross-checked against live `tmux ls`.
-_BADGE = {"running": "#16a34a", "done": "#0f766e", "queued": "#2563eb",
-          "gated": "#b45309", "killed": "#dc2626", "conditional": "#64748b",
-          "stale": "#d97706"}
-_TIER = {"paper": "#15803d", "estimate": "#b45309", "reference": "#475569", "diagnostic": "#7c3aed"}
-_TIER_LABEL = {"paper": "PAPER-GRADE", "estimate": "ESTIMATE",
-               "reference": "REFERENCE", "diagnostic": "DIAGNOSTIC"}
-_GROUPS = [("running", "🟢 Running now"), ("done", "✅ Done — number on disk"),
-           ("planned", "⏳ Planned / queued"), ("conditional", "🔵 Conditional / later")]
-
-
-def live_tmux_sessions():
-    """Set of live tmux session names, or None if tmux can't be read (so we can
-    distinguish 'no sessions' from 'unverified')."""
-    try:
-        r = subprocess.run(["tmux", "ls"], capture_output=True, text=True, timeout=5)
-        if r.returncode != 0:
-            return set()
-        return {ln.split(":", 1)[0] for ln in r.stdout.splitlines() if ":" in ln}
-    except Exception:
-        return None
-
-
-def load_run_status() -> dict:
-    path = RESULTS / "run_status.json"
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-
-
-def _disk_number(result_key: str, rows_by_name: dict) -> str:
-    row = rows_by_name.get(result_key)
-    if row is None:
-        return ""
-    u = fmt_percent(row.union)
-    if not u:
-        return ""
-    flag = f' <span class="st-flag">⚠{escape(row.flag)}</span>' if row.flag else ""
-    return f'<span class="st-num">{u}% union · eps {escape(row.eps or "?")}</span>{flag}'
-
-
-def status_header(status: dict, live) -> str:
-    h = status.get("header", {}) or {}
-    src = ("live tmux" if live else "status file (tmux unreadable)") if live is not None else \
-        "status file (tmux unreadable)"
-    upd = status.get("updated", "")
-
-    def row(label, val):
-        return (f'<div class="sh-row"><span class="sh-k">{escape(label)}</span>'
-                f'<span class="sh-v">{inline_markdown(val)}</span></div>') if val else ""
-
-    return ('<div class="status-header">'
-            + row("Phase", h.get("phase", ""))
-            + row("Critical path", h.get("critical_path", ""))
-            + row("Decision owed (Kiet)", h.get("decision_owed", ""))
-            + f'<div class="sh-meta">running-status source: {escape(src)}; status file as of '
-              f'{escape(str(upd))}</div></div>')
-
-
-def _fmt_ts(epoch_secs) -> str:
-    if not epoch_secs:
-        return ""
-    return datetime.fromtimestamp(epoch_secs, timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-
-
-_CONFIG_EPOCHS = {}
-
-
-def _config_epochs(cfg_path):
-    """Total epochs from the REAL run config (resolves `_base_` inheritance via the
-    trainer's own loader) — never hardcoded. None if unreadable."""
-    if not cfg_path:
-        return None
-    if cfg_path in _CONFIG_EPOCHS:
-        return _CONFIG_EPOCHS[cfg_path]
-    val = None
-    try:
-        import sys as _sys
-        srcp = str(ROOT / "src")
-        if srcp not in _sys.path:
-            _sys.path.insert(0, srcp)
-        from robustdro.utils.io import load_config
-        val = int(load_config(str(ROOT / cfg_path))["train"]["epochs"])
-    except Exception:
-        val = None
-    _CONFIG_EPOCHS[cfg_path] = val
-    return val
-
-
-def _live_progress(item: dict):
-    """Live (current, total, unit, updated_ts, extra). Total epochs read from the run
-    CONFIG (item['config']); current = epoch files of the ACTIVE run among
-    item['progress_runs'] (the loss_mats dir with the newest mtime); updated_ts = that
-    dir's newest file mtime. No hand-entered progress; denominator is the real config."""
-    unit = "epoch"
-    total = _config_epochs(item.get("config"))
-    runs = item.get("progress_runs")
-    if isinstance(runs, str):
-        runs = [runs]
-    if runs:
-        best = None  # (mtime, count, index)
-        for i, r in enumerate(runs):
-            d = ROOT / "results" / "loss_mats" / r
-            files = list(d.glob("ep*.pt")) if d.is_dir() else []
-            if not files:
-                continue
-            newest = max(p.stat().st_mtime for p in files)
-            if best is None or newest > best[0]:
-                best = (newest, len(files), i)
-        if best:
-            extra = f"seed {best[2] + 1}/{len(runs)}" if len(runs) > 1 else ""
-            return best[1], total, unit, best[0], extra
-        return 0, total, unit, None, ""
-    prog = item.get("progress") or {}
-    return prog.get("current", 0), total or prog.get("total"), unit, None, ""
-
-
-def _progress_bar(item: dict, queued: bool):
-    current, total, unit, ts, extra = _live_progress(item)
-    if total:
-        pct = max(0.0, min(100.0, 100.0 * (current or 0) / total))
-        fill = f'<div class="pfill{" queued" if queued else ""}" style="width:{pct:.0f}%"></div>'
-        label = f'{current or 0}/{total} {unit} · {pct:.0f}%' + (f' · {extra}' if extra else "")
-    elif queued:
-        fill = '<div class="pfill queued" style="width:100%"></div>'
-        label = 'queued'
-    else:
-        return "", ts
-    return (f'<div class="pwrap"><div class="pbar">{fill}</div>'
-            f'<span class="plabel">{escape(label)}</span></div>'), ts
-
-
-_STALE_SECS = 900  # >15 min with no new epoch file => not a live "running"
-
-
-def _status_item_row(it, key, live, status_updated, rows_by_name, position=None):
-    tier = it.get("tier")
-    tier_html = (f'<span class="st-tier" style="background:{_TIER[tier]}">{_TIER_LABEL[tier]}</span>'
-                 if tier in _TIER else "")
-    num = _disk_number(it.get("result", ""), rows_by_name) if it.get("result") else ""
-    order_html = f'<span class="st-order">#{position}</span>' if position is not None else ""
-    bar_html, bar_ts = ("", None)
-    if key in ("running", "planned"):
-        bar_html, bar_ts = _progress_bar(it, queued=(key == "planned"))
-    badge = it.get("badge", key)
-    note = ""
-    if key == "running":
-        # 1) dead process (tmux session gone) -> killed
-        if it.get("session") is not None:
-            if live is None:
-                note = ' <span class="st-note">(tmux unverified)</span>'
-            elif it["session"] not in live:
-                badge = "killed"
-                note = ' <span class="st-note">(session gone)</span>'
-        # 2) hung process (session alive but no epoch progress for >15min) -> stale
-        if badge != "killed" and bar_ts is not None:
-            age = datetime.now(timezone.utc).timestamp() - bar_ts
-            if age > _STALE_SECS:
-                badge = "stale"
-                note += (f' <span class="st-note">(stalled: no progress {int(age // 60)}min, '
-                         f'as of {escape(_fmt_ts(bar_ts))})</span>')
-    updated = _fmt_ts(bar_ts) or it.get("updated") or status_updated
-    upd_html = f'<span class="st-upd">upd {escape(updated)}</span>' if updated else ""
-    return (
-        '<div class="st-row">'
-        f'{order_html}'
-        f'<span class="st-badge" style="background:{_BADGE.get(badge, "#64748b")}">{escape(badge)}</span>'
-        f'<span class="st-name">{escape(it.get("name", ""))}{note}</span>'
-        f'{tier_html}{num}{bar_html}'
-        f'<span class="st-detail">{inline_markdown(it.get("detail", ""))}</span>'
-        f'{upd_html}'
-        '</div>')
-
-
-def experiment_status(status: dict, rows_by_name: dict, live) -> str:
-    if not status:
-        return ('<p>No <code>results/run_status.json</code> found — status view is data-driven; '
-                'runners/planner write that file.</p>')
-    groups = status.get("groups", {}) or {}
-    status_updated = str(status.get("updated", ""))
-    out = []
-    for key, title in _GROUPS:
-        items = groups.get(key) or []
-        if not items:
-            continue
-        # Planned group renders in explicit queue ORDER (by `order`, then given order).
-        if key == "planned":
-            items = sorted(enumerate(items), key=lambda t: (t[1].get("order", 10_000), t[0]))
-            rows = [_status_item_row(it, key, live, status_updated, rows_by_name, position=i + 1)
-                    for i, (_, it) in enumerate(items)]
-            hint = ' <span class="st-hint">(execution order top→bottom)</span>'
-        else:
-            rows = [_status_item_row(it, key, live, status_updated, rows_by_name) for it in items]
-            hint = ""
-        out.append(f'<div class="st-group"><h3>{escape(title)}{hint}</h3>{"".join(rows)}</div>')
-    return "".join(out) or "<p>run_status.json has no groups.</p>"
 
 
 def timeline_entries(log_md: str) -> str:
@@ -652,7 +496,7 @@ def render_ramp_chart() -> str:
     eps = [10, 20, 30, 40, 50, 60, 70, 80]
     pts = []
     for e in eps:
-        p = RESULTS / f"eval_ramp_ep{e}_eps8255_apgd_n1000.json"
+        p = RESULTS / "ramp" / f"eval_ramp_ep{e}_eps8255_apgd_n1000.json"
         if not p.exists():
             return ""
         try:
@@ -739,8 +583,7 @@ def render_findings(items: list) -> str:
 
 
 def main() -> None:
-    memory_md = read_text(STATE)                       # PROJECT_STATE.md (consolidated)
-    log_md = read_text(LOG) if LOG.exists() else ""     # legacy timeline (optional)
+    memory_md = read_text(STATE)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     template = Template(
@@ -976,14 +819,13 @@ def main() -> None:
 <body>
   <header>
     <h1>AttackDRO Dashboard</h1>
-    <p>Regenerated from <code>docs/PROJECT_STATE.md</code> and <code>results/*.json</code> (+ <code>run_status.json</code>) at $generated_at. &nbsp;·&nbsp; <a href="landscape.html" style="font-weight:600">→ Landscape (one-page overview)</a></p>
+    <p>Regenerated from <code>docs/PROJECT_STATE.md</code> and result JSON files at $generated_at. &nbsp;·&nbsp; <a href="landscape.html" style="font-weight:600">→ Landscape (one-page overview)</a></p>
   </header>
   <main>
     <div class="status">$status_cards</div>
     <section>
-      <h2>Experiment status</h2>
-      $status_header
-      $experiment_status
+      <h2>Current Next Action</h2>
+      $current_next_action
     </section>
     <section>
       <h2>Union robustness by run (compare view)</h2>
@@ -998,10 +840,6 @@ def main() -> None:
       $ramp_chart
     </section>
     <section>
-      <h2>RAMP epoch curve (reference)</h2>
-      $ramp_curve
-    </section>
-    <section>
       <h2>Findings — mechanism spine (F1–F9)</h2>
       <p style="margin:0 0 8px;color:var(--muted);font-size:.85rem;">Source type:
         <span class="ftag ftag-in-house">IN-HOUSE</span>
@@ -1014,8 +852,8 @@ def main() -> None:
       $open_items
     </section>
     <section>
-      <h2>Decision History</h2>
-      <div class="timeline">$timeline</div>
+      <h2>Run-Update Checklist</h2>
+      $run_update_checklist
     </section>
     <section>
       <h2>Notes</h2>
@@ -1040,22 +878,16 @@ def main() -> None:
 """
     )
     rows = load_results()
-    rows_by_name = {r.name: r for r in rows}
-    run_status = load_run_status()
-    live = live_tmux_sessions()
     html_page = template.substitute(
         generated_at=escape(generated_at),
         status_cards=status_cards(memory_md),
-        status_header=status_header(run_status, live),
-        experiment_status=experiment_status(run_status, rows_by_name, live),
+        current_next_action=render_fragment(extract_section_like(memory_md, "Current Next Action")),
         compare_view=compare_view(rows),
         results_table=results_table(rows),
         ramp_chart=render_ramp_chart(),
         findings=render_findings(load_findings()),
-        open_items=render_fragment(extract_section_like(memory_md, "CURRENT PHASE")),
-        ramp_curve=render_fragment(re.sub(r"^#\s.*\n", "", (RESULTS / "ramp_epoch_curve.md").read_text(encoding="utf-8"), count=1))
-        if (RESULTS / "ramp_epoch_curve.md").exists() else "<p>No ramp_epoch_curve.md yet.</p>",
-        timeline=timeline_entries(log_md),
+        open_items=render_fragment(extract_section_like(memory_md, "Current Next Action")),
+        run_update_checklist=render_fragment(extract_section_like(memory_md, "Run-Update Checklist")),
     )
 
     OUT.write_text(html_page, encoding="utf-8")

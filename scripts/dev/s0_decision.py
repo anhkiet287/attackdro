@@ -3,7 +3,7 @@
 
 Reads the seed-0 eval JSONs (reactive + predictive) and the predictive TRAINING
 history (for the MEASURED attack-FLOPs ratio / floor / phi), compares against the
-matched RAMP repro (union @8/255), writes results/reactive_vs_predictive_s0.md,
+matched RAMP repro (union @8/255), writes results/reports/reactive_vs_predictive_s0.md,
 and prints a machine-readable `DECISION=CONTINUE_BOTH|KILL_PREDICTIVE` line the
 chain script greps to branch the gated continuation.
 
@@ -61,7 +61,10 @@ def _pred_train_stats(trainj):
         return {}
     hist = trainj.get("history", []) or []
     post = [h for h in hist if h.get("epoch", 0) >= COLD]
-    flops = [h["pb/attack_flops_ratio"] for h in post if "pb/attack_flops_ratio" in h]
+    flops = [h["efficiency/attack_flops_ratio"] for h in post
+             if "efficiency/attack_flops_ratio" in h]
+    if not flops:
+        flops = [h["pb/attack_flops_ratio"] for h in post if "pb/attack_flops_ratio" in h]
     last = hist[-1] if hist else {}
     return {
         "flops_ratio": (sum(flops) / len(flops)) if flops else None,
@@ -169,7 +172,8 @@ def main():
 
 
 def _write(lines):
-    out = os.path.join(ROOT, "results/reactive_vs_predictive_s0.md")
+    out = os.path.join(ROOT, "results/reports/reactive_vs_predictive_s0.md")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as f:
         f.write("\n".join(lines) + "\n")
     print(f"[s0_decision] wrote {out}", file=sys.stderr)

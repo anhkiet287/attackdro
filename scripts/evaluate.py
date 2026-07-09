@@ -2,7 +2,7 @@
 """Evaluate a checkpoint's worst-case UNION robustness (linf, l2, l1).
 
 The evaluation linchpin — works on both self-trained checkpoints and downloaded
-baselines, always under the shared protocol (configs/base.yaml). Uses AutoAttack
+baselines, always under the shared protocol (`configs/paper/base_ramp_apgd_8255.yaml`). Uses AutoAttack
 per norm and the union rule.
 
 Examples
@@ -18,13 +18,14 @@ Examples
     python scripts/evaluate.py --checkpoint ckpt.pt --norms linf
 
     # Upstream RAMP checkpoint under our independent union harness:
-    python scripts/evaluate.py --model_family ramp --config configs/base.yaml \
+    python scripts/evaluate.py --model_family ramp --config configs/paper/base_ramp_apgd_8255.yaml \
         --checkpoint external/RAMP/models/pretr_Linf.pth -n 1000
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -39,9 +40,89 @@ from robustdro.utils.seed import set_seed                     # noqa: E402
 from robustdro.utils.wandb_log import log_eval_summary        # noqa: E402
 
 
+def _checkpoint_label(path: str) -> str:
+    return os.path.basename(path)
+
+
+def _maybe_load_efficiency(out: str) -> float | None:
+    """Attach the canonical train-time attack-FLOPs ratio to eval summaries when
+    evaluating the standard per-run layout. Uses the final epoch value, falling
+    back to method-specific legacy keys for older files."""
+    train_json = os.path.join(os.path.dirname(out), "train.json")
+    if not os.path.exists(train_json):
+        return None
+    try:
+        with open(train_json, encoding="utf-8") as f:
+            hist = (json.load(f).get("history") or [])
+    except Exception:
+        return None
+    for row in reversed(hist):
+        for key in ("efficiency/attack_flops_ratio", "pb/attack_flops_ratio", "exp/attack_flops_ratio"):
+            if key in row and row[key] is not None:
+                return float(row[key])
+    return None
+
+
+def _add_canonical_eval_keys(metrics: dict, cfg: dict, *, checkpoint: str, seed: int,
+                             efficiency: float | None = None) -> dict:
+    per_norm = metrics.get("per_norm_robust_acc", {}) or {}
+    eval_attack = cfg.get("eval_attack", {}) or {}
+    aliases = {
+        "eval/checkpoint": _checkpoint_label(checkpoint),
+        "eval/clean_acc": metrics.get("clean_acc"),
+        "eval/worst_union": metrics.get("worst_union_acc"),
+        "eval/attack_linf_steps": (eval_attack.get("linf", {}) or {}).get("steps"),
+        "eval/attack_l2_steps": (eval_attack.get("l2", {}) or {}).get("steps"),
+        "eval/attack_l1_steps": (eval_attack.get("l1", {}) or {}).get("steps"),
+        "eval/seed": seed,
+    }
+    for norm in ("linf", "l2", "l1"):
+        aliases[f"eval/robust_{norm}"] = per_norm.get(norm)
+    if efficiency is not None:
+        aliases["efficiency/attack_flops_ratio"] = efficiency
+    out = dict(metrics)
+    out.update({k: v for k, v in aliases.items() if v is not None})
+    return out
+
+
+def _update_run_meta(out: str, cfg: dict, args, checkpoint_label: str) -> None:
+    seed_dir = os.path.dirname(out)
+    if not os.path.basename(seed_dir).startswith("s"):
+        return
+    meta_path = os.path.join(os.path.dirname(seed_dir), "run_meta.json")
+    if not os.path.exists(meta_path):
+        return
+    try:
+        with open(meta_path, encoding="utf-8") as f:
+            meta = json.load(f)
+    except Exception:
+        meta = {}
+    eval_attack = cfg.get("eval_attack", {}) or {}
+    meta.update({
+        "checkpoint_evaluated": checkpoint_label,
+        "eval_checkpoint": checkpoint_label,
+        "eval_attack": {
+            "version": args.version,
+            "linf_steps": (eval_attack.get("linf", {}) or {}).get("steps"),
+            "l2_steps": (eval_attack.get("l2", {}) or {}).get("steps"),
+            "l1_steps": (eval_attack.get("l1", {}) or {}).get("steps"),
+            "n_examples": args.n_examples,
+        },
+        "eval_seed": args.seed,
+        "eval_out": out,
+    })
+    train_cfg = cfg.get("train", {}) or {}
+    meta.setdefault("train_attack", {
+        "attack": train_cfg.get("attack"),
+        "steps": [{"norm": a.get("norm"), "steps": a.get("steps")}
+                  for a in train_cfg.get("attacks", [])],
+    })
+    save_json(meta, meta_path)
+
+
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--config", default="configs/pgd_at.yaml")
+    p.add_argument("--config", default="configs/paper/base_ramp_apgd_8255.yaml")
     p.add_argument("--checkpoint", required=True)
     p.add_argument("--model-family", "--model_family", dest="model_family",
                    default="robustdro", choices=["robustdro", "ramp"],
@@ -126,8 +207,15 @@ def main():
     eval_eps = cfg["threat_model"]["linf"]["eps"]
     mismatch = train_eps is not None and abs(float(train_eps) - float(eval_eps)) > 1e-6
 
+    efficiency = _maybe_load_efficiency(out)
+    metrics = _add_canonical_eval_keys(
+        metrics, cfg, checkpoint=args.checkpoint, seed=args.seed, efficiency=efficiency
+    )
+    checkpoint_label = _checkpoint_label(args.checkpoint)
+
     save_json({
         "checkpoint": args.checkpoint,
+        "checkpoint_evaluated": checkpoint_label,
         "model_family": args.model_family,
         "epoch": ckpt.get("epoch") if ckpt is not None else None,
         "n_examples": args.n_examples,
@@ -136,6 +224,7 @@ def main():
         "train_eval_eps_mismatch": mismatch,
         "metrics": metrics,
     }, out)
+    _update_run_meta(out, cfg, args, checkpoint_label)
     print(f"\n[eval] saved -> {out}")
     if mismatch:
         print(f"[eval] ⚠ train/eval eps MISMATCH: trained@{float(train_eps):g}, "
@@ -147,7 +236,8 @@ def main():
                                            os.path.splitext(os.path.basename(args.checkpoint))[0])
         tier = args.tier or ("repro" if args.model_family == "ramp" else None)
         log_eval_summary(cfg, run_name, metrics, version=args.version,
-                         tier=tier, n_examples=args.n_examples)
+                         tier=tier, n_examples=args.n_examples,
+                         checkpoint=checkpoint_label, seed=args.seed)
 
 
 if __name__ == "__main__":
