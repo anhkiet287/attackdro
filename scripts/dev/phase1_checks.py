@@ -5,11 +5,12 @@ target ~l∞/l2 level) and l1 eval must CONVERGE (l1@100≈l1@200). If not, the 
 badly with full training → STOP before spending predictive hours.
 
 Reads reactive train.json (final-epoch train adv-acc) + eval.json (per-norm eval robust) +
-/tmp/rl1_{100,200}.json. Writes results/phase1_firstrun_checks.md and prints GAPCHECK=PASS|FAIL."""
+/tmp/rl1_{100,200}.json. Writes results/reports/phase1_firstrun_checks.md and prints GAPCHECK=PASS|FAIL."""
 import json
 import os
 
 ROOT = "/mnt/c/Users/ADMIN/Documents/Claude/Projects/ATTACKDRO"
+REPORTS = f"{ROOT}/results/reports"
 L1_GAP_MAX = 18.0     # was 41.7 under plain-PGD; l∞/l2 were 13.7/8.2 -> ≤18 = closed
 L1_CONV_MAX = 0.7     # |l1@100 - l1@200| pp
 L1_FLOOR = 38.0       # l1 eval must be clearly above the broken ~30 (RAMP@50 = 47.1)
@@ -81,7 +82,8 @@ def main():
 
 
 def _w(lines):
-    open(f"{ROOT}/results/phase1_firstrun_checks.md", "w").write("\n".join(lines) + "\n")
+    os.makedirs(REPORTS, exist_ok=True)
+    open(f"{REPORTS}/phase1_firstrun_checks.md", "w").write("\n".join(lines) + "\n")
 
 
 if __name__ == "__main__":

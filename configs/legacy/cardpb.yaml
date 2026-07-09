@@ -9,7 +9,7 @@
 # Efficiency claim: match reactive (per-sample soft T=0.25) union robustness at
 # <=60% MEASURED attack-FLOPs. Logs pb/attack_flops_ratio + phi/misprediction_rate.
 # =============================================================================
-_base_: configs/bindaware_sample.yaml
+_base_: configs/legacy/bindaware_sample.yaml
 
 method: attackdro
 run_name: predictive_pb_8255

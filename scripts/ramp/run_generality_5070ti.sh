@@ -22,6 +22,14 @@ RUN_ARM_A="${RUN_ARM_A:-1}"
 DATA="${DATA:-$ROOT/data}"                  # local CIFAR (torchvision layout: $DATA/cifar-10-batches-py)
 OUT="$ROOT/results/exploration"; mkdir -p "$OUT"
 
+compact_ramp_log() {
+  # RAMP uses tqdm progress bars, which are useful interactively but explosive in
+  # saved logs. Convert carriage returns to records, keep setup/eval/final-epoch
+  # summaries and errors, and drop per-batch progress updates.
+  tr '\r' '\n' | grep --line-buffered -E \
+    '^\[generality|^\[train\]|^\[eval\]|^\[predalloc\]|^[[:space:]]*100%\||robust accuracy|clean accuracy|attack_flops_ratio|DONE|ERROR|Error|Traceback|Exception' || true
+}
+
 if [[ ! -d "$DATA/cifar-10-batches-py" ]]; then
   echo "ERROR: CIFAR-10 not at $DATA/cifar-10-batches-py — set DATA=..." >&2; exit 1
 fi
@@ -41,12 +49,12 @@ cd "$ROOT/external/RAMP"
 if [[ "$RUN_ARM_A" == "1" ]]; then
   echo "[generality-5070ti] Arm A = RAMP-full (FLOPs 1.0) ..."
   "$PY" -u RAMP.py "${BASE[@]}" --fname armA_rampfull_5070ti \
-    2>&1 | tee "$OUT/ramp_armA_full_5070ti.log" | grep -E 'acc_s|robust accuracy (Linf|L2|L1|Linf\+|after)|clean accuracy' | tail -20
+    2>&1 | compact_ramp_log | tee "$OUT/ramp_armA_full_5070ti.log"
 fi
 
 echo "[generality-5070ti] Arm B = RAMP + predictive allocation (target ~0.60 FLOPs) ..."
 PREDALLOC_FLOOR="$FLOOR" "$PY" -u RAMP_predalloc.py "${BASE[@]}" --fname armB_predalloc_5070ti \
-  2>&1 | tee "$OUT/ramp_armB_predalloc_5070ti.log" | grep -E 'predalloc|acc_s|robust accuracy (Linf|L2|L1|Linf\+|after)|clean accuracy' | tail -25
+  2>&1 | compact_ramp_log | tee "$OUT/ramp_armB_predalloc_5070ti.log"
 
 echo
 echo "[generality-5070ti] DONE. Read the comparison:"

@@ -8,7 +8,7 @@
 # Purpose (Gate-α): measure per-sample binding persistence vs chance to decide
 # TRAIT / STATE / BOTH. Dumps -> dumps/probe_binding/gate_alpha_avgfrozen_s0/.
 # =============================================================================
-_base_: configs/avg_frozen.yaml
+_base_: configs/legacy/avg_frozen.yaml
 
 run_name: gate_alpha_avgfrozen_s0
 

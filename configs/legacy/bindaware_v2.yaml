@@ -10,7 +10,7 @@
 # 3 scalars / 5 epochs of leakage); still group-level -> F4 ceiling applies;
 # train set is 49k (holdout excluded). Complements, does not replace, CARD-3b.
 # =============================================================================
-_base_: configs/bindaware.yaml
+_base_: configs/legacy/bindaware.yaml
 
 method: attackdro
 run_name: bindaware_v2

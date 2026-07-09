@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """Eval convergence curve: per-norm APGD robust acc vs attack steps, on best.pt.
-Reads results/eval_curve/<run>__<norm>__s<steps>.json, writes results/eval_curve.md.
+Reads results/eval_curve/<run>__<norm>__s<steps>.json, writes results/reports/eval_curve.md.
 Runs = reactive_apgd_8255 (baseline), predictive_apgd_8255 (ks16), predictive_ks8_apgd_8255 (ks8)."""
 import glob
 import json
@@ -9,6 +9,7 @@ import re
 
 ROOT = "/mnt/c/Users/ADMIN/Documents/Claude/Projects/ATTACKDRO"
 DIR = f"{ROOT}/results/eval_curve"
+REPORTS = f"{ROOT}/results/reports"
 RUNS = [("reactive_apgd_8255", "reactive (baseline)"),
         ("predictive_apgd_8255", "predictive ks16"),
         ("predictive_ks8_apgd_8255", "predictive ks8")]
@@ -48,8 +49,9 @@ def main():
             dtxt = f"{last2[-1]-last2[-2]:+.2f}pp" if len(last2) == 2 else "—"
             L.append(f"| {label} | {cells} | {dtxt} |")
         L.append("")
-    open(f"{ROOT}/results/eval_curve.md", "w").write("\n".join(L) + "\n")
-    print("wrote results/eval_curve.md")
+    os.makedirs(REPORTS, exist_ok=True)
+    open(f"{REPORTS}/eval_curve.md", "w").write("\n".join(L) + "\n")
+    print("wrote results/reports/eval_curve.md")
     print("grid:", {n: sorted(grid[n]) for n in NORMS})
 
 

@@ -3,7 +3,7 @@
 Images are kept in raw [0,1] pixel space (ToTensor only) — NO normalization
 transform. Standardization, if any, happens inside the model so that adversarial
 epsilons keep their literal pixel meaning (see models/preact_resnet.py and
-configs/base.yaml). Train-time augmentation is the standard random-crop + flip.
+the active paper config). Train-time augmentation is the standard random-crop + flip.
 """
 
 from __future__ import annotations

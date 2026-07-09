@@ -45,7 +45,7 @@ import torch
 
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_ROOT = REPO / "dumps" / "probe_binding"
-DEFAULT_OUT = REPO / "results" / "trait_state_v3.md"
+DEFAULT_OUT = REPO / "results" / "reports" / "trait_state_v3.md"
 
 # Automated-verdict thresholds (raw numbers are printed so a human can read the
 # verdict directly regardless of these cutoffs).

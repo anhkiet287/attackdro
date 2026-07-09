@@ -8,13 +8,13 @@ cd "$ROOT" || exit 1
 export WANDB_MODE=online
 PY=.venv/bin/python
 CKDIR=external/RAMP/trained_models/RAMP_beta_0.5_lbd_5_0
+mkdir -p results/ramp
 for EP in 10 20 30 60 70 80; do
-  out=results/eval_ramp_ep${EP}_eps8255_apgd_n1000.json
+  out=results/ramp/eval_ramp_ep${EP}_eps8255_apgd_n1000.json
   [ -f "$out" ] && { echo "SKIP ep$EP (done)"; continue; }
   echo "===== RAMP ep_${EP} eval $(date -u +%T) ====="
-  $PY scripts/evaluate.py --model_family ramp --config configs/base.yaml \
+  $PY scripts/evaluate.py --model_family ramp --config configs/paper/base_ramp_apgd_8255.yaml \
     --checkpoint $CKDIR/ep_${EP}_0.pth -n 1000 --version apgd --bs 125 \
     --run-name ramp_repro_ep${EP} --tier repro --out "$out" || echo "FAIL ep$EP"
 done
-$PY scripts/dev/ramp_epoch_curve_table.py
 echo "===== RAMP EPOCH CURVE DONE $(date -u +%T) ====="

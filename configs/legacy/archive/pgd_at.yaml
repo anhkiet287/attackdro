@@ -3,7 +3,7 @@
 # Inherits the protocol from base.yaml; only optimization + the TRAINING attack
 # are defined here. The eps comes from base.threat_model.linf.eps.
 # =============================================================================
-_base_: configs/base.yaml
+_base_: configs/legacy/base.yaml
 
 method: pgd_at
 run_name: pgd_at_linf

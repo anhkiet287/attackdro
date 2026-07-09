@@ -3,14 +3,14 @@
 
 Examples
 --------
-    # Full PGD-AT run (uses configs/pgd_at.yaml -> inherits configs/base.yaml)
-    python scripts/train.py --config configs/pgd_at.yaml
+    # Paper reactive run under the locked RAMP recipe
+    python scripts/train.py --config configs/paper/reactive_ramprecipe.yaml
 
     # 2-iteration smoke test on GPU (offline wandb, tiny eval)
-    python scripts/train.py --config configs/pgd_at.yaml --smoke
+    python scripts/train.py --config configs/paper/reactive_ramprecipe.yaml --smoke
 
     # Ad-hoc overrides
-    python scripts/train.py --config configs/pgd_at.yaml --epochs 10 --wandb-mode offline
+    python scripts/train.py --config configs/paper/reactive_ramprecipe.yaml --epochs 10 --wandb-mode offline
 """
 
 from __future__ import annotations

@@ -13,7 +13,7 @@
 # Winning arm = LOWEST-FLOPs arm meeting all three; if none => finding
 # "l1 predictability floors the efficiency".
 # =============================================================================
-_base_: configs/cardpb.yaml
+_base_: configs/legacy/cardpb.yaml
 
 run_name: predictive_v2
 

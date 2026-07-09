@@ -125,10 +125,10 @@ def should_run_gpu(args, snap: dict) -> tuple[bool, str]:
 
 
 def trainer_cfg() -> dict:
-    cfg = load_config("configs/bindaware_sample.yaml")
+    cfg = load_config("configs/paper/reactive_ramprecipe.yaml")
     return apply_overrides(cfg, {
         "seed": 0,
-        "run_name": "timing_bindaware_sample_T025",
+        "run_name": "timing_reactive_ramprecipe_T025",
         "wandb.mode": "disabled",
         "train.groupdro.temperature": 0.25,
         "train.groupdro.probe_binding": False,
@@ -150,14 +150,14 @@ def time_our_trainer(rows: list[Row]) -> tuple[float | None, float | None]:
     elapsed, metrics = timed(lambda: trainer.train_epoch(1, max_steps=20))
     sec_per_step = elapsed / 20.0
     sec_per_epoch = sec_per_step * train_steps_per_epoch
-    full_seed = sec_per_epoch * 50
+    full_seed = sec_per_epoch * 80
     peak_reserved_gb = None
     if torch.cuda.is_available():
         peak_reserved_gb = torch.cuda.max_memory_reserved() / 1024**3
     rows.append(Row(
         "our per-sample-soft trainer T=0.25",
         f"20 steps = {fmt_s(elapsed)} ({sec_per_step:.2f}s/step)",
-        f"{fmt_s(sec_per_epoch)}/epoch x50 = {fmt_s(full_seed)}/seed",
+        f"{fmt_s(sec_per_epoch)}/epoch x80 = {fmt_s(full_seed)}/seed",
         trainer.device,
         "measured",
         f"{train_steps_per_epoch} steps/epoch; train loss {metrics.get('train/loss', float('nan')):.4f}",
@@ -171,7 +171,7 @@ def time_our_trainer(rows: list[Row]) -> tuple[float | None, float | None]:
     attacks = [
         ("linf10", trainer.attacks[0]),
         ("l2_10", trainer.attacks[1]),
-        ("l1_20", trainer.attacks[2]),
+        ("l1_10", trainer.attacks[2]),
     ]
     per_attack: list[str] = []
 
@@ -199,7 +199,7 @@ def time_our_trainer(rows: list[Row]) -> tuple[float | None, float | None]:
 
 
 def load_ramp_model_and_data(n: int):
-    cfg = load_config("configs/base.yaml")
+    cfg = load_config("configs/paper/base_ramp_apgd_8255.yaml")
     model, _ = load_eval_checkpoint(
         "external/RAMP/trained_models/RAMP_beta_0.5_lbd_5_0/ep_80_0.pth",
         cfg, model_family="ramp", device="cuda",
@@ -339,7 +339,7 @@ def time_ramp8b(rows: list[Row]) -> None:
 
 def time_trait_state(rows: list[Row]) -> None:
     cmd = [sys.executable, "scripts/dev/binding_trait_vs_state_v2.py",
-           "--out", "results/trait_state_v2.md"]
+           "--out", "results/reports/trait_state_v2.md"]
     dt, result = timed(lambda: subprocess.run(cmd, cwd=REPO, text=True,
                                              stdout=subprocess.PIPE,
                                              stderr=subprocess.STDOUT))
@@ -419,7 +419,7 @@ def render(rows: list[Row], snap: dict, trainer_peak_gb: float | None) -> str:
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--out", default="results/timing_projections.md")
+    p.add_argument("--out", default="results/reports/timing_projections.md")
     p.add_argument("--cpu-only", action="store_true")
     p.add_argument("--force-gpu", action="store_true",
                    help="Run GPU timings even if tmux sessions are present.")

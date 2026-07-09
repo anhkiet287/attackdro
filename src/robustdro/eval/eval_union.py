@@ -1,7 +1,7 @@
 """eval_union — the P0 linchpin.
 
 Evaluate a model's worst-case robust accuracy over the UNION of (linf, l2, l1)
-threat models under the shared protocol (configs/base.yaml). This harness is
+threat models under the shared paper protocol. This harness is
 kept independent of training (golden rule #4) and is used for BOTH self-trained
 checkpoints and downloaded baselines re-evaluated with our attack config.
 

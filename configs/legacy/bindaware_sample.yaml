@@ -9,7 +9,7 @@
 # cross-norm scale bias appears, enable the declared-exception variant:
 #   --set train.groupdro.normalize_losses=zscore
 # =============================================================================
-_base_: configs/attackdro.yaml
+_base_: configs/legacy/attackdro.yaml
 
 method: attackdro            # same trainer; different objective
 run_name: bindaware_sample

@@ -15,7 +15,7 @@ FAST = {"train.milestones": [2], "train.lr": 0.05, "train.save_freq": 1,
 
 
 def run(run_name, epochs, resume=None):
-    cfg = load_config("configs/reactive_ramprecipe.yaml")
+    cfg = load_config("configs/paper/reactive_ramprecipe.yaml")
     ov = dict(FAST, **{"train.epochs": epochs, "run_name": run_name, "train.resume": resume})
     cfg = apply_overrides(cfg, ov)
     set_seed(cfg["seed"])

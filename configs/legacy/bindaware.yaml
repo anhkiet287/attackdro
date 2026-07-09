@@ -5,7 +5,7 @@
 #   probe (weakest norm -> most weight), REPLACING the per-step loss update.
 # Aims q directly at the union-binding norm instead of raw per-group loss scale.
 # =============================================================================
-_base_: configs/attackdro.yaml
+_base_: configs/legacy/attackdro.yaml
 
 method: attackdro          # same trainer; different q signal
 run_name: bindaware

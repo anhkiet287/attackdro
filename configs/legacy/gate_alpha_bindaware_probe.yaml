@@ -11,7 +11,7 @@
 # run) to capture the post-lr-drop (ep 25, 40) migration window (F6).
 # Dumps -> dumps/probe_binding/gate_alpha_bindaware_T025_s0/.
 # =============================================================================
-_base_: configs/bindaware_sample.yaml
+_base_: configs/legacy/bindaware_sample.yaml
 
 run_name: gate_alpha_bindaware_T025_s0
 

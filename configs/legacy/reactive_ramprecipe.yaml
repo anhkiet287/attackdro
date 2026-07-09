@@ -8,7 +8,7 @@
 # Protocol UNCHANGED: eps=(8/255, 0.5, 12), train==eval. RAMP's method params (lambda=2,
 # beta=0.5) are NOT ours — we swap only the recipe, keeping our per-sample-soft objective.
 # =============================================================================
-_base_: configs/bindaware_sample.yaml
+_base_: configs/legacy/bindaware_sample.yaml
 
 run_name: reactive_ramprecipe
 

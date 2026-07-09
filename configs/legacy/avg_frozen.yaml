@@ -4,7 +4,7 @@
 # Isolates the effect of the q-update from the training recipe, AND doubles as
 # our in-house AVG baseline (kills the recipe confound for the final table).
 # =============================================================================
-_base_: configs/attackdro.yaml
+_base_: configs/legacy/attackdro.yaml
 
 method: attackdro          # same trainer (GroupDROTrainer); q just frozen
 run_name: avg_frozen

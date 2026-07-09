@@ -14,7 +14,7 @@ mkdir -p "$ROOT/results"
 cd "$ROOT"
 "$PY" scripts/evaluate.py \
   --model_family ramp \
-  --config configs/base.yaml \
+  --config configs/paper/base_ramp_apgd_8255.yaml \
   --checkpoint "$CKPT" \
   --n-examples "${N_EXAMPLES:-10000}" \
   --version apgd \

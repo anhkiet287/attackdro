@@ -5,7 +5,7 @@
 # .003/.05/.05); everything else = our recipe (epochs, LR, batch, protocol eps,
 # eval harness). Tier-1 recipe-controlled MSD row.
 # =============================================================================
-_base_: configs/attackdro.yaml
+_base_: configs/legacy/attackdro.yaml
 method: attackdro
 run_name: msd_inhouse
 train:

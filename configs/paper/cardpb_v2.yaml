@@ -1,0 +1,22 @@
+# Paper method: CARD-PB v2 predictive binding with confidence floor.
+# Floor driver is miss_vol_g = P(true_bind=g AND b_hat!=g). The conditional
+# miss-rate log is diagnostic only. Adaptive probe guard is off in confidence mode.
+
+_base_: configs/paper/base_ramp_apgd_8255.yaml
+
+run_name: predictive_cardpb_v2
+
+train:
+  groupdro:
+    objective: predictive_binding
+    temperature: 0.25
+    normalize_losses: none
+    pb_beta: 0.5
+    pb_k_floor: 3
+    pb_recal_rho: 0.1
+    pb_cold_epochs: 5
+    pb_guard_pp: 3.0
+    pb_floor_mode: confidence
+    pb_floor_kspan: 12
+    pb_floor_ema: 0.5
+    pb_adaptive_floor: false

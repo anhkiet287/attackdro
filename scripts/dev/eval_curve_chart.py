@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Render the eval convergence curve as an SVG (3 panels: ℓ∞/ℓ2/ℓ1; 3 lines each:
 reactive / pred-ks16 / pred-ks8). x = APGD steps (log), y = robust acc %. Plateau = converged.
-Reads results/eval_curve/<run>__<norm>__s<steps>.json → writes results/eval_curve_chart.svg."""
+Reads results/eval_curve/<run>__<norm>__s<steps>.json → writes results/reports/eval_curve_chart.svg."""
 import glob
 import json
 import math
@@ -10,6 +10,7 @@ import re
 
 ROOT = "/mnt/c/Users/ADMIN/Documents/Claude/Projects/ATTACKDRO"
 DIR = f"{ROOT}/results/eval_curve"
+OUT = f"{ROOT}/results/reports/eval_curve_chart.svg"
 NORMS = [("linf", "ℓ∞ (8/255)"), ("l2", "ℓ2 (0.5)"), ("l1", "ℓ1 (12)")]
 # categorical, fixed order by entity: baseline=slate, ks16=blue, ks8=amber
 RUNS = [("reactive_apgd_8255", "reactive", "#64748B"),
@@ -32,8 +33,9 @@ def esc(t):
 
 def main():
     data = {(r[0], n[0]): series(r[0], n[0]) for r in RUNS for n in NORMS}
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
     if not any(data.values()):
-        open(f"{ROOT}/results/eval_curve_chart.svg", "w").write(
+        open(OUT, "w").write(
             '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="60">'
             '<text x="12" y="34" font-family="sans-serif" font-size="14" fill="#64748B">'
             'eval_curve_chart: no data yet (runs after the frontier sweep).</text></svg>')
@@ -105,8 +107,8 @@ def main():
             S.append(f'<text x="{X(s_last)+7:.1f}" y="{Y(v_last)+3:.1f}" font-size="10.5" '
                      f'font-weight="600" fill="{col}">{v_last:.1f}</text>')
     S.append("</svg>")
-    open(f"{ROOT}/results/eval_curve_chart.svg", "w").write("\n".join(S))
-    print("wrote results/eval_curve_chart.svg")
+    open(OUT, "w").write("\n".join(S))
+    print("wrote results/reports/eval_curve_chart.svg")
 
 
 if __name__ == "__main__":

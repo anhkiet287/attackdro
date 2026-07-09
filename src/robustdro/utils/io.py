@@ -34,7 +34,7 @@ def load_config(path: str, _seen: set[str] | None = None) -> dict[str, Any]:
     """Load a YAML config, resolving a single `_base_` parent (recursively).
 
     `_base_` is a path relative to the current working directory (repo root),
-    matching how the configs reference `configs/base.yaml`.
+    matching how active configs reference repo-root-relative base paths.
     """
     _seen = _seen or set()
     path = os.path.normpath(path)

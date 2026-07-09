@@ -52,7 +52,7 @@ CIFAR10_CLASSES = [
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--config", default="configs/pgd_at.yaml")
+    p.add_argument("--config", default="configs/paper/base_ramp_apgd_8255.yaml")
     p.add_argument("--checkpoint", default="checkpoints/pgd_at_linf_best.pt",
                    help="Model checkpoint. If missing, uses a random-init model.")
     p.add_argument("--norm", default="linf", choices=["linf", "l2", "l1"])
