@@ -16,22 +16,33 @@ Last sync: 2026-07-09 UTC. Active branch family: `card-pb-fixes`; cleanup work m
 - Threat model: eps `(linf 8/255, l2 0.5, l1 12)`.
 - Schedule: 80 epochs, SGD, lr `0.05`, milestone `[70]`, gamma `0.1` to lr `0.005`, momentum `0.9`, weight decay `5e-4`, `save_freq: 10`.
 - Train attack: APGD train, steps `10/10/10`; reactive FLOPs denominator is `30`.
-- Develop eval: APGD `20/20/100`.
-- Final claim eval: full AutoAttack.
+- Develop eval: APGD `20/20/100`, restarts `1` = DECISION grade for batch comparison and thresholds.
+- Final claim eval: full AutoAttack via `--version standard` = FINAL grade, only for the selected winner/final claim.
 - Frontier grid: `{2,4,8,16,24}`.
 - Paper configs must be raw-run safe and must not rely on hidden CLI overrides.
 
 ## Current Results Table
-| run | epoch | union | linf/l2/l1 | FLOPs | role |
-|---|---:|---:|---|---:|---|
-| RAMP ep50 | 50 | 42.9 | 43.9/61.9/47.1 | 1.00 | reference |
-| RAMP ep80 | 80 | 46.0 | 47.3/65.8/49.6 | 1.00 | final comparator |
-| reactive_apgd_8255 | 50 | 38.8 | 39.2/60.1/45.6 | 1.00 | reactive ref |
-| predictive ks16 | 50 | 38.7 | 40.3/59.9/44.8 | 0.665 | l1 holds, FLOPs high |
-| predictive ks2 | 50 | 39.4 | 41.4/59.9/44.2 | 0.584 | current frontier winner |
-| predictive ks4 | 50 | 39.8 | 41.1/61.2/46.9 | 0.603 | l1 strong, just over target |
-| predictive ks8 | 50 | 39.3 | 41.0/59.9/45.7 | 0.623 | holds, over target |
-| predictive ks24 | 37/50 at sync | pending | pending | about 0.706 so far | active/incomplete |
+| run | epoch | grade/source | clean | union | linf/l2/l1 | FLOPs | role |
+|---|---:|---|---:|---:|---|---:|---|
+| RAMP paper ep50 | 50 | APGD-only `100/100/100`, n1000 | 77.5 | 42.9 | 43.9/61.9/47.1 | 1.00 | reference |
+| RAMP paper ep80 | 80 | APGD-only `100/100/100`, n1000, original paper ckpt `RAMP_beta_0.5_lbd_5_0/ep_80_0.pth`, `results/ramp/eval_ramp_ep80_eps8255_apgd_n1000.json` | 81.2 | 46.0 | 47.3/65.8/49.6 | 1.00 | APGD-grade over-report; not decision/final grade |
+| RAMP paper ep80 decision | 80 | APGD `20/20/100`, restarts1, n1000, same original paper ckpt, `results/ramp/eval_ramp_ep80_apgd_2020100_n1000.json` | 81.2 | 46.2 | 47.3/65.8/49.7 | 1.00 | DECISION grade anchor |
+| RAMP paper ep80 standard | 80 | `--version standard`, n1000, same original paper ckpt, `results/ramp/eval_ramp_ep80_fullAA_n1000.json` | 81.2 | 46.2 | 47.3/65.8/49.7 | 1.00 | FINAL-command measurement; did not confirm expected 44.6 on n1000 |
+| Arm A ep80 full-AA log | 80 | 5070ti reproduce log `results/exploration/ramp_armA_full_5070ti.log` | 80.9 | 44.7 | 46.1/65.9/48.8 | 1.00 | RAMP reproduce, final-grade log; matches paper lambda=5 target 44.6 +/- 0.6 |
+| Arm A ep80 decision | 80 | APGD `20/20/100`, restarts1, n1000, `external/RAMP/trained_models/armA_rampfull_5070ti/ep_80_0.pth`, `results/ramp/eval_armA_rampfull_ep80_apgd_2020100_n1000.json` | 81.2 | 44.8 | 45.9/66.4/50.1 | 1.00 | reproduce cross-check, DECISION grade |
+| reactive_apgd_8255 | 50 | APGD `20/20/100`, n1000 | 76.7 | 38.8 | 39.2/60.1/45.6 | 1.00 | reactive ref |
+| predictive ks16 | 50 | APGD `20/20/100`, n1000 | 76.1 | 38.7 | 40.3/59.9/44.8 | 0.665 | l1 holds, FLOPs high |
+| predictive ks2 | 50 | APGD `20/20/100`, n1000 | 77.2 | 39.4 | 41.4/59.9/44.2 | 0.584 | current frontier winner |
+| predictive ks4 | 50 | APGD `20/20/100`, n1000 | 78.4 | 39.8 | 41.1/61.2/46.9 | 0.603 | l1 strong, just over target |
+| predictive ks8 | 50 | APGD `20/20/100`, n1000 | 77.7 | 39.3 | 41.0/59.9/45.7 | 0.623 | holds, over target |
+| predictive ks24 | 37/50 at sync | incomplete | pending | pending | pending | about 0.706 so far | active/incomplete |
+
+## RAMP Grade Reconciliation
+- T2 grade for `results/ramp/eval_ramp_ep80_eps8255_apgd_n1000.json`: original paper checkpoint `external/RAMP/trained_models/RAMP_beta_0.5_lbd_5_0/ep_80_0.pth`, APGD-only `100/100/100`, restarts1, n1000. It is APGD-grade and can over-report; it is not DECISION grade `20/20/100` and not FINAL grade full AutoAttack.
+- New T1a DECISION-grade re-eval of the same paper checkpoint at APGD `20/20/100` gives clean/linf/l2/l1/union = `81.2/47.3/65.8/49.7/46.2`.
+- New T1b `--version standard` re-eval of the same paper checkpoint on n1000 gives the same `81.2/47.3/65.8/49.7/46.2`; this did not confirm the expected `~44.6-44.7` for that checkpoint/subset, so do not cite it as resolving paper-ckpt `46.0` vs `44.6`.
+- Arm A reproduce full-AA log is resolved: clean/linf/l2/l1/union = `80.9/46.1/65.9/48.8/44.7`; the `46.1` number is linf-only, not union.
+- Arm A DECISION-grade APGD `20/20/100` cross-check gives clean/linf/l2/l1/union = `81.2/45.9/66.4/50.1/44.8`, consistent with the Arm A full-AA log union within `0.1pp`.
 
 ## Current Next Action
 - Kiet-requested next controlled comparison: seed-0 full-80 Colab/RAMP80 batch under the locked protocol. Run develop eval APGD `20/20/100` after each run; run full AutoAttack only for the batch winner after the batch is complete.
@@ -41,7 +52,8 @@ Last sync: 2026-07-09 UTC. Active branch family: `card-pb-fixes`; cleanup work m
   3. predbind ks4: pin config plus kspan/floor before launch (`__TBD__`)
   4. curriculum-rescaled: `configs/exploration/idea3_curriculum_ramp80.yaml`
   5. idea1 fail-rate: `configs/exploration/idea1_failrate_ramp80.yaml`
-- Active writer now: run #5 idea1 fail-rate is already running on 5070ti and writing `results/idea1_failrate_ramp80_apgd_8255/s0/`; do not edit its process, config, or result files.
+- Active writer status: no `scripts/train.py` process at 2026-07-09 01:30 UTC. Run #5 idea1 fail-rate has completed to `results/idea1_failrate_ramp80_apgd_8255/s0/` with `ckpt/ep080.pt`, `ckpt/last.pt`, `train.json`, and `eval.json`; do not overwrite those files.
+- Control fixed-10 eval is BLOCKED until `results/reactive_ramprecipe/s0/ckpt/best.pt` exists from the control training run. Requested command: `python scripts/evaluate.py --config configs/paper/base_ramp_apgd_8255.yaml --checkpoint results/reactive_ramprecipe/s0/ckpt/best.pt --version apgd --n-examples 1000 --bs 250`. Current `evaluate.py` would otherwise infer run name `best` from `best.pt`, so use `--run-name reactive_ramprecipe` or `--out results/reactive_ramprecipe/s0/eval.json` when actually running it.
 - W&B online preflight passed on 2026-07-08 for run names `idea1_failrate_ramp80_apgd_8255_s0`, `idea2_kmin_recovery_ramp80_apgd_8255_s0`, and `idea3_curriculum_ramp80_apgd_8255_s0`.
 
 ### Pre-registration Placeholders
