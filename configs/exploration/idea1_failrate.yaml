@@ -3,7 +3,7 @@
 # >= threshold of the batch has failed (batch-level stop, no per-sample repack — noted as
 # future work). Reads: exp/steps_{norm} (self-selected steps), exp/attack_flops_ratio (vs
 # 0.665 CARD-PB), l1 train-vs-eval gap. Short run (ep20). exploration:true device:colab.
-_base_: configs/reactive_ramprecipe.yaml
+_base_: configs/paper/reactive_ramprecipe.yaml
 run_name: idea1_failrate
 results_dir: results/exploration/
 wandb:

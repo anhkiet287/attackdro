@@ -3,7 +3,7 @@
 # Step count ramps by epoch: ep<10 -> 3, ep<20 -> 6, ep>=20 -> 10 (all norms). Compare to
 # idea3_control_fixed10 (same recipe, fixed 10/10/10 from the start). Read at ep30: does
 # curriculum reach comparable union/l1 with lower cumulative attack-FLOPs? l1 the key risk.
-_base_: configs/reactive_ramprecipe.yaml
+_base_: configs/paper/reactive_ramprecipe.yaml
 run_name: idea3_curriculum
 results_dir: results/exploration/
 wandb:
