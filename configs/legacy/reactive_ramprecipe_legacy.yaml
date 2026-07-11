@@ -1,0 +1,24 @@
+# =============================================================================
+# reactive_ramprecipe.yaml — OUR reactive method (per-sample soft T=0.25) under
+# RAMP's TRAINING RECIPE, to separate METHOD from RECIPE (F7 / recipe-control).
+# RAMP from-scratch recipe (paper p8, Implementations — CONFIRMED): 80 epochs, SGD
+# lr=0.05 for epochs 1-70 then 0.005 (single x10 drop) for 71-80, momentum 0.9,
+# weight_decay 5e-4.  (vs ours: 50 epochs, lr 0.1, drops at 25/40.)
+# lr=0.05 is the FROM-SCRATCH lr; the 0.01 code default is the fine-tune schedule.
+# Protocol UNCHANGED: eps=(8/255, 0.5, 12), train==eval. RAMP's method params (lambda=2,
+# beta=0.5) are NOT ours — we swap only the recipe, keeping our per-sample-soft objective.
+# =============================================================================
+_base_: configs/legacy/bindaware_sample.yaml
+
+run_name: reactive_ramprecipe
+
+train:
+  epochs: 80
+  lr: 0.05                     # RAMP from-scratch lr (paper p8; CONFIRMED)
+  momentum: 0.9
+  weight_decay: 0.0005         # 5e-4, matches RAMP
+  lr_schedule: multistep
+  milestones: [70]             # RAMP from-scratch: lr 0.05 for ep 1-70, then 0.005 (x10 drop) for 71-80
+  groupdro:
+    objective: per_sample_soft
+    temperature: 0.25          # OUR reactive method — only the recipe differs

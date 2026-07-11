@@ -1,0 +1,19 @@
+# =============================================================================
+# gate_alpha_probe.yaml — GATE-α decision-grade fixed-probe run.
+# Inherits avg_frozen (uniform q, the neutral Tier-1 AVG recipe: the training
+# itself does NOT reweight toward any norm, so per-sample binding dynamics are
+# observed cleanly). ONLY change vs avg_frozen: turn the fixed indexed probe ON,
+# 512 samples, dump [G,B] loss matrix every 5 epochs over the full 50-epoch run.
+#
+# Purpose (Gate-α): measure per-sample binding persistence vs chance to decide
+# TRAIT / STATE / BOTH. Dumps -> dumps/probe_binding/gate_alpha_avgfrozen_s0/.
+# =============================================================================
+_base_: configs/legacy/avg_frozen.yaml
+
+run_name: gate_alpha_avgfrozen_s0
+
+train:
+  groupdro:
+    probe_binding: true
+    probe_binding_size: 512
+    probe_binding_every: 5

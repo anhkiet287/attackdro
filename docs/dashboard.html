@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AttackDRO Dashboard</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --ink: #1f2933;
+      --muted: #667085;
+      --line: #d9dee7;
+      --accent: #0f766e;
+      --accent-2: #334155;
+      --soft: #eef6f5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+    header {
+      padding: 28px 32px 18px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #ffffff 0%, #f7f8fb 100%);
+    }
+    header h1 {
+      margin: 0 0 6px;
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+      letter-spacing: 0;
+    }
+    header p { margin: 0; color: var(--muted); }
+    main {
+      width: min(1280px, calc(100vw - 32px));
+      margin: 22px auto 40px;
+      display: grid;
+      gap: 18px;
+    }
+    section, .status article {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+    }
+    section { padding: 18px; }
+    h2 { margin: 0 0 12px; font-size: 1.1rem; letter-spacing: 0; }
+    h3 { margin: 4px 0 8px; font-size: 1rem; }
+    p { margin: 8px 0; }
+    ul { margin: 8px 0 0 18px; padding: 0; }
+    li { margin: 6px 0; }
+    code {
+      background: #eef2f7;
+      border: 1px solid #dce3ec;
+      padding: 0 4px;
+      border-radius: 4px;
+      font-size: 0.92em;
+    }
+    .status {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .status article { padding: 14px; }
+    .status span {
+      display: block;
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .status p { margin-bottom: 0; }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .table-wrap {
+      max-width: 100%;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+      background: #fff;
+    }
+    th, td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      white-space: nowrap;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      background: #f1f5f9;
+      color: var(--accent-2);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    tbody tr:hover { background: var(--soft); }
+    .timeline {
+      max-height: 560px;
+      overflow: auto;
+      padding-right: 8px;
+    }
+    .timeline-item {
+      border-left: 3px solid var(--accent);
+      padding: 8px 0 14px 14px;
+      margin: 0 0 12px;
+    }
+    .timeline-date {
+      color: var(--muted);
+      font-size: 0.86rem;
+      font-weight: 700;
+    }
+    .tl-fold { margin-top: 8px; }
+    .tl-fold summary { cursor: pointer; color: var(--accent); font-weight: 700; font-size: 0.88rem;
+      padding: 6px 0; list-style: revert; }
+    textarea {
+      width: 100%;
+      min-height: 170px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      font: inherit;
+      background: #fff;
+      color: var(--ink);
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 0.88rem;
+      margin-top: 12px;
+    }
+    .status-header { display: grid; gap: 6px; margin: 0 0 14px; padding: 12px 14px;
+      background: var(--soft); border: 1px solid var(--line); border-radius: 8px; }
+    .sh-row { display: grid; grid-template-columns: 170px 1fr; gap: 10px; align-items: baseline; }
+    .sh-k { color: var(--accent); font-weight: 700; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .sh-v { font-size: 0.95rem; }
+    .sh-meta { color: var(--muted); font-size: 0.78rem; margin-top: 4px; }
+    .st-group { margin: 0 0 14px; }
+    .st-group h3 { margin: 0 0 8px; font-size: 0.98rem; }
+    .st-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 6px 8px;
+      border-bottom: 1px solid var(--line); font-size: 0.88rem; }
+    .st-badge, .st-tier { color: #fff; font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.03em; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+    .st-name { font-weight: 600; }
+    .st-note { color: var(--muted); font-weight: 400; font-size: 0.78rem; }
+    .st-num { font-variant-numeric: tabular-nums; color: var(--accent-2); font-weight: 700; }
+    .st-flag { color: #b45309; font-weight: 600; font-size: 0.78rem; }
+    .st-detail { color: var(--muted); font-size: 0.82rem; flex: 1 1 200px; }
+    .st-order { font-weight: 800; color: var(--accent-2); font-size: 0.82rem; min-width: 26px; }
+    .st-upd { color: var(--muted); font-size: 0.72rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .st-hint { color: var(--muted); font-weight: 400; font-size: 0.78rem; }
+    .pwrap { display: inline-flex; align-items: center; gap: 7px; }
+    .pbar { width: 130px; height: 9px; background: #e5e9f0; border-radius: 999px; overflow: hidden; }
+    .pfill { height: 100%; background: var(--accent); border-radius: 999px; transition: width .3s; }
+    .pfill.queued { background: repeating-linear-gradient(45deg, #cbd5e1, #cbd5e1 5px, #eef2f7 5px, #eef2f7 10px); }
+    .plabel { font-size: 0.74rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .cmp-filter { margin: 0 0 12px; color: var(--muted); font-size: 0.9rem; }
+    .cmp-filter select { font: inherit; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; }
+    .cmp-legend { margin-left: 14px; font-size: 0.85rem; }
+    .cmp { display: grid; gap: 8px; }
+    .cmp-row { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) minmax(150px, 210px); gap: 10px; align-items: center; }
+    .cmp-label { font-size: 0.86rem; font-weight: 600; }
+    .cmp-meta { display: block; color: var(--muted); font-weight: 400; font-size: 0.74rem; }
+    .cmp-track { background: #eef2f7; border-radius: 6px; overflow: hidden; height: 22px; }
+    .cmp-bar { height: 100%; display: flex; align-items: center; justify-content: flex-end; border-radius: 6px; min-width: 34px; transition: width .2s; }
+    .cmp-val { color: #fff; font-size: 0.78rem; font-weight: 700; padding-right: 7px; }
+    .cmp-pernorm { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
+    .cmp-flag { color: #b45309; font-weight: 600; margin-left: 6px; }
+    @media (max-width: 860px) {
+      header { padding: 22px 16px 16px; }
+      .cmp-row { grid-template-columns: 1fr; }
+      main { width: min(100vw - 20px, 1280px); }
+      .status, .grid { grid-template-columns: 1fr; }
+      th, td { white-space: normal; }
+    }
+    /* --- Findings F1-F9 cards (P-06): typed source + status --- */
+    .finding { border: 1px solid var(--line); border-left-width: 5px; border-radius: 8px;
+               padding: 10px 13px; margin: 9px 0; background: var(--panel); }
+    .finding.src-in-house { border-left-color: #0d9488; }
+    .finding.src-cited { border-left-color: #d97706; }
+    .finding.src-cross-confirmed { border-left-color: #7c3aed; }
+    .finding-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 5px; }
+    .fid { font-weight: 800; font-size: 0.98rem; color: var(--accent-2); }
+    .ftag, .fstatus { font-size: 11px; padding: 1.5px 8px; border-radius: 11px; font-weight: 700;
+                      letter-spacing: 0.02em; }
+    .ftag-in-house { background: #ccfbf1; color: #0f766e; }
+    .ftag-cited { background: #fef3c7; color: #92400e; }
+    .ftag-cross-confirmed { background: #ede9fe; color: #6d28d9; }
+    .fstatus-confirmed { background: #dcfce7; color: #166534; }
+    .fstatus-decision-grade { background: #dbeafe; color: #1e40af; }
+    .fstatus-open-frontier { background: #ffedd5; color: #9a3412; }
+    .fstatus-fixes-committed { background: #f3e8ff; color: #7e22ce; }
+    .fconc { margin: 3px 0; font-weight: 600; color: var(--ink); }
+    .fev, .fsrc { margin: 3px 0; font-size: 0.86rem; color: var(--muted); }
+    .fsrc code, .fev code { font-size: 0.82rem; }
+    .fchain { margin-top: 7px; font-size: 0.86rem; }
+    .fchain summary { cursor: pointer; color: var(--accent); font-weight: 700; }
+    .fchain ol { margin: 6px 0 2px 0; padding-left: 20px; }
+    .fchain li { margin: 5px 0; color: var(--ink); }
+    /* --- RAMP union-vs-epoch chart (P-07): single-series line --- */
+    .ch-fig { margin: 0 0 10px; }
+    .ch-svg { width: 100%; height: auto; max-width: 760px; display: block; }
+    .ch-grid { stroke: var(--line); stroke-width: 1; }
+    .ch-ylab, .ch-xlab { fill: var(--muted); font-size: 12px; }
+    .ch-axtitle { fill: var(--muted); font-size: 12px; font-weight: 600; }
+    .ch-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+    .ch-dot { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; }
+    .ch-dot:hover { r: 6; }
+    .ch-anno { stroke: var(--accent-2); stroke-width: 1.5; stroke-dasharray: 4 3; opacity: .65; }
+    .ch-annolab { fill: var(--accent-2); font-size: 11px; font-weight: 600; }
+    .ch-endlab { fill: var(--accent); font-size: 13px; font-weight: 800; }
+    .ch-lab { fill: var(--ink); font-size: 11px; font-weight: 600; }
+    .ch-cap { color: var(--muted); font-size: .8rem; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AttackDRO Dashboard</h1>
+    <p>Regenerated from <code>docs/PROJECT_STATE.md</code> and result JSON files at 2026-07-09 02:00 UTC. &nbsp;·&nbsp; <a href="landscape.html" style="font-weight:600">→ Landscape (one-page overview)</a></p>
+  </header>
+  <main>
+    <div class="status"><ul>
+<li>Kiet-requested next controlled comparison: seed-0 full-80 Colab/RAMP80 batch under the locked protocol. Run develop eval APGD <code>20/20/100</code> after each run; run full AutoAttack only for the batch winner after the batch is complete.</li>
+<li>Batch order:</li>
+</ul>
+<p>  1. control fixed-10: <code>configs/paper/reactive_ramprecipe.yaml</code></p>
+<p>  2. flat-6: <code>configs/exploration/flat6_ramp80.yaml</code></p>
+<p>  3. predbind ks4: pin config plus kspan/floor before launch (<code>__TBD__</code>)</p>
+<p>  4. curriculum-rescaled: <code>configs/exploration/idea3_curriculum_ramp80.yaml</code></p>
+<p>  5. idea1 fail-rate: <code>configs/exploration/idea1_failrate_ramp80.yaml</code></p>
+<ul>
+<li>Active writer status: no <code>scripts/train.py</code> process at 2026-07-09 01:30 UTC. Run #5 idea1 fail-rate has completed to <code>results/idea1_failrate_ramp80_apgd_8255/s0/</code> with <code>ckpt/ep080.pt</code>, <code>ckpt/last.pt</code>, <code>train.json</code>, and <code>eval.json</code>; do not overwrite those files.</li>
+<li>Control fixed-10 eval is BLOCKED until <code>results/reactive_ramprecipe/s0/ckpt/best.pt</code> exists from the control training run. Requested command: <code>python scripts/evaluate.py --config configs/paper/base_ramp_apgd_8255.yaml --checkpoint results/reactive_ramprecipe/s0/ckpt/best.pt --version apgd --n-examples 1000 --bs 250</code>. Current <code>evaluate.py</code> would otherwise infer run name <code>best</code> from <code>best.pt</code>, so use <code>--run-name reactive_ramprecipe</code> or <code>--out results/reactive_ramprecipe/s0/eval.json</code> when actually running it.</li>
+<li>W&amp;B online preflight passed on 2026-07-08 for run names <code>idea1_failrate_ramp80_apgd_8255_s0</code>, <code>idea2_kmin_recovery_ramp80_apgd_8255_s0</code>, and <code>idea3_curriculum_ramp80_apgd_8255_s0</code>.</li>
+</ul>
+<h3>Pre-registration Placeholders</h3>
+<ul>
+<li>Winner rule / union threshold: <code>__TBD__</code></li>
+<li>Per-norm floors and l1 risk tolerance: <code>__TBD__</code></li>
+<li>Predbind ks4 kspan/floor: <code>__TBD__</code></li>
+</ul></div>
+    <section>
+      <h2>Current Next Action</h2>
+      <ul>
+<li>Kiet-requested next controlled comparison: seed-0 full-80 Colab/RAMP80 batch under the locked protocol. Run develop eval APGD <code>20/20/100</code> after each run; run full AutoAttack only for the batch winner after the batch is complete.</li>
+<li>Batch order:</li>
+</ul>
+<p>  1. control fixed-10: <code>configs/paper/reactive_ramprecipe.yaml</code></p>
+<p>  2. flat-6: <code>configs/exploration/flat6_ramp80.yaml</code></p>
+<p>  3. predbind ks4: pin config plus kspan/floor before launch (<code>__TBD__</code>)</p>
+<p>  4. curriculum-rescaled: <code>configs/exploration/idea3_curriculum_ramp80.yaml</code></p>
+<p>  5. idea1 fail-rate: <code>configs/exploration/idea1_failrate_ramp80.yaml</code></p>
+<ul>
+<li>Active writer status: no <code>scripts/train.py</code> process at 2026-07-09 01:30 UTC. Run #5 idea1 fail-rate has completed to <code>results/idea1_failrate_ramp80_apgd_8255/s0/</code> with <code>ckpt/ep080.pt</code>, <code>ckpt/last.pt</code>, <code>train.json</code>, and <code>eval.json</code>; do not overwrite those files.</li>
+<li>Control fixed-10 eval is BLOCKED until <code>results/reactive_ramprecipe/s0/ckpt/best.pt</code> exists from the control training run. Requested command: <code>python scripts/evaluate.py --config configs/paper/base_ramp_apgd_8255.yaml --checkpoint results/reactive_ramprecipe/s0/ckpt/best.pt --version apgd --n-examples 1000 --bs 250</code>. Current <code>evaluate.py</code> would otherwise infer run name <code>best</code> from <code>best.pt</code>, so use <code>--run-name reactive_ramprecipe</code> or <code>--out results/reactive_ramprecipe/s0/eval.json</code> when actually running it.</li>
+<li>W&amp;B online preflight passed on 2026-07-08 for run names <code>idea1_failrate_ramp80_apgd_8255_s0</code>, <code>idea2_kmin_recovery_ramp80_apgd_8255_s0</code>, and <code>idea3_curriculum_ramp80_apgd_8255_s0</code>.</li>
+</ul>
+<h3>Pre-registration Placeholders</h3>
+<ul>
+<li>Winner rule / union threshold: <code>__TBD__</code></li>
+<li>Per-norm floors and l1 risk tolerance: <code>__TBD__</code></li>
+<li>Predbind ks4 kspan/floor: <code>__TBD__</code></li>
+</ul>
+    </section>
+    <section>
+      <h2>Union robustness by run (compare view)</h2>
+      <div class="cmp-filter">Tier: <select id="tierFilter" onchange="filterTier()"><option value="all">all</option><option value="in-house">in-house</option><option value="repro">repro</option><option value="official">official</option></select><span class="cmp-legend"><span style="color:#0f766e">■ in-house</span> <span style="color:#b45309">■ repro</span> <span style="color:#334155">■ official</span></span></div><div class="cmp"><div class="cmp-row" data-tier="repro"><div class="cmp-label">ramp_ep80_apgd_2020100_n1000<span class="cmp-meta">repro · eps 8/255 · apgd</span></div><div class="cmp-track"><div class="cmp-bar" style="width:100.0%;background:#b45309"><span class="cmp-val">46.2</span></div></div><div class="cmp-pernorm">l∞ 47.3 · l2 65.8 · l1 49.7</div></div><div class="cmp-row" data-tier="repro"><div class="cmp-label">ramp_ep80_fullAA_n1000<span class="cmp-meta">repro · eps 8/255 · standard</span></div><div class="cmp-track"><div class="cmp-bar" style="width:100.0%;background:#b45309"><span class="cmp-val">46.2</span></div></div><div class="cmp-pernorm">l∞ 47.3 · l2 65.8 · l1 49.7</div></div><div class="cmp-row" data-tier="repro"><div class="cmp-label">ramp_ep80_eps8255_apgd_n1000<span class="cmp-meta">repro · eps 8/255 · apgd</span></div><div class="cmp-track"><div class="cmp-bar" style="width:99.6%;background:#b45309"><span class="cmp-val">46.0</span></div></div><div class="cmp-pernorm">l∞ 47.3 · l2 65.8 · l1 49.6</div></div><div class="cmp-row" data-tier="repro"><div class="cmp-label">armA_rampfull_ep80_apgd_2020100_n1000<span class="cmp-meta">repro · eps 8/255 · apgd</span></div><div class="cmp-track"><div class="cmp-bar" style="width:97.0%;background:#b45309"><span class="cmp-val">44.8</span></div></div><div class="cmp-pernorm">l∞ 45.9 · l2 66.4 · l1 50.1</div></div><div class="cmp-row" data-tier="repro"><div class="cmp-label">ramp_ep40_eps8255_apgd_n1000<span class="cmp-meta">repro · eps 8/255 · apgd</span></div><div class="cmp-track"><div class="cmp-bar" style="width:94.4%;background:#b45309"><span class="cmp-val">43.6</span></div></div><div class="cmp-pernorm">l∞ 44.7 · l2 61.1 · l1 46.4</div></div><div class="cmp-row" data-tier="repro"><div class="cmp-label">ramp_ep60_eps8255_apgd_n1000<span class="cmp-meta">repro · eps 8/255 · apgd</span></div><div class="cmp-track"><div class="cmp-bar" style="width:94.4%;background:#b45309"><span class="cmp-val">43.6</span></div></div><div class="cmp-pernorm">l∞ 45.0 · l2 60.9 · l1 46.9</div></div><div class="cmp-row" data-tier="repro"><div class="cmp-label">ramp_ep70_eps8255_apgd_n1000<span class="cmp-meta">repro · eps 8/255 · apgd</span></div><div class="cmp-track"><div class="cmp-bar" style="width:93.3%;background:#b45309"><span class="cmp-val">43.1</span></div></div><div class="cmp-pernorm">l∞ 43.5 · l2 64.3 · l1 47.7</div></div><div class="cmp-row" data-tier="repro"><div class="cmp-label">ramp_ep50_eps8255_apgd_n1000<span class="cmp-meta">repro · eps 8/255 · apgd</span></div><div class="cmp-track"><div class="cmp-bar" style="width:92.9%;background:#b45309"><span class="cmp-val">42.9</span></div></div><div class="cmp-pernorm">l∞ 43.9 · l2 61.9 · l1 47.1</div></div><div class="cmp-row" data-tier="repro"><div class="cmp-label">ramp_ep30_eps8255_apgd_n1000<span class="cmp-meta">repro · eps 8/255 · apgd</span></div><div class="cmp-track"><div class="cmp-bar" style="width:91.8%;background:#b45309"><span class="cmp-val">42.4</span></div></div><div class="cmp-pernorm">l∞ 43.4 · l2 57.2 · l1 46.4</div></div><div class="cmp-row" data-tier="repro"><div class="cmp-label">ramp_ep20_eps8255_apgd_n1000<span class="cmp-meta">repro · eps 8/255 · apgd</span></div><div class="cmp-track"><div class="cmp-bar" style="width:88.1%;background:#b45309"><span class="cmp-val">40.7</span></div></div><div class="cmp-pernorm">l∞ 41.6 · l2 55.7 · l1 43.6</div></div><div class="cmp-row" data-tier="in-house"><div class="cmp-label">predictive_ks4_apgd_8255_s0<span class="cmp-meta">in-house · eps 8/255 · apgd</span></div><div class="cmp-track"><div class="cmp-bar" style="width:86.1%;background:#0f766e"><span class="cmp-val">39.8</span></div></div><div class="cmp-pernorm">l∞ 41.1 · l2 61.2 · l1 46.9</div></div><div class="cmp-row" data-tier="in-house"><div class="cmp-label">predictive_ks2_apgd_8255_s0<span class="cmp-meta">in-house · eps 8/255 · apgd</span></div><div class="cmp-track"><div class="cmp-bar" style="width:85.3%;background:#0f766e"><span class="cmp-val">39.4</span></div></div><div class="cmp-pernorm">l∞ 41.4 · l2 59.9 · l1 44.2</div></div><div class="cmp-row" data-tier="in-house"><div class="cmp-label">predictive_ks8_apgd_8255_s0<span class="cmp-meta">in-house · eps 8/255 · apgd</span></div><div class="cmp-track"><div class="cmp-bar" style="width:85.1%;background:#0f766e"><span class="cmp-val">39.3</span></div></div><div class="cmp-pernorm">l∞ 41.0 · l2 59.9 · l1 45.7</div></div><div class="cmp-row" data-tier="repro"><div class="cmp-label">idea1_failrate_ramp80_apgd_8255_s0<span class="cmp-meta">repro · eps 8/255 · apgd</span></div><div class="cmp-track"><div class="cmp-bar" style="width:84.4%;background:#b45309"><span class="cmp-val">39.0</span></div></div><div class="cmp-pernorm">l∞ 40.4 · l2 59.0 · l1 45.7</div></div><div class="cmp-row" data-tier="in-house"><div class="cmp-label">reactive_apgd_8255_s0<span class="cmp-meta">in-house · eps 8/255 · apgd</span></div><div class="cmp-track"><div class="cmp-bar" style="width:84.0%;background:#0f766e"><span class="cmp-val">38.8</span></div></div><div class="cmp-pernorm">l∞ 39.2 · l2 60.1 · l1 45.6</div></div><div class="cmp-row" data-tier="in-house"><div class="cmp-label">predictive_apgd_8255_s0<span class="cmp-meta">in-house · eps 8/255 · apgd</span></div><div class="cmp-track"><div class="cmp-bar" style="width:83.8%;background:#0f766e"><span class="cmp-val">38.7</span></div></div><div class="cmp-pernorm">l∞ 40.3 · l2 59.9 · l1 44.8</div></div><div class="cmp-row" data-tier="repro"><div class="cmp-label">ramp_ep10_eps8255_apgd_n1000<span class="cmp-meta">repro · eps 8/255 · apgd</span></div><div class="cmp-track"><div class="cmp-bar" style="width:72.1%;background:#b45309"><span class="cmp-val">33.3</span></div></div><div class="cmp-pernorm">l∞ 34.1 · l2 49.3 · l1 37.9</div></div></div>
+    </section>
+    <section>
+      <h2>Results</h2>
+      <div class="table-wrap"><table><thead><tr><th>Run</th><th>Clean</th><th>linf</th><th>l2</th><th>l1</th><th>Union</th><th>FLOPs</th><th>Tier</th><th>eps</th><th>Flag</th><th>n</th><th>Version</th><th>Source</th></tr></thead><tbody><tr><td>ramp_ep80_apgd_2020100_n1000</td><td>81.2</td><td>47.3</td><td>65.8</td><td>49.7</td><td><strong>46.2</strong></td><td>—</td><td>repro</td><td>8/255</td><td></td><td>1000</td><td>apgd</td><td><code>ramp/eval_ramp_ep80_apgd_2020100_n1000.json</code></td></tr><tr><td>ramp_ep80_fullAA_n1000</td><td>81.2</td><td>47.3</td><td>65.8</td><td>49.7</td><td><strong>46.2</strong></td><td>—</td><td>repro</td><td>8/255</td><td></td><td>1000</td><td>standard</td><td><code>ramp/eval_ramp_ep80_fullAA_n1000.json</code></td></tr><tr><td>ramp_ep80_eps8255_apgd_n1000</td><td>81.2</td><td>47.3</td><td>65.8</td><td>49.6</td><td><strong>46.0</strong></td><td>—</td><td>repro</td><td>8/255</td><td></td><td>1000</td><td>apgd</td><td><code>ramp/eval_ramp_ep80_eps8255_apgd_n1000.json</code></td></tr><tr><td>armA_rampfull_ep80_apgd_2020100_n1000</td><td>81.2</td><td>45.9</td><td>66.4</td><td>50.1</td><td><strong>44.8</strong></td><td>—</td><td>repro</td><td>8/255</td><td></td><td>1000</td><td>apgd</td><td><code>ramp/eval_armA_rampfull_ep80_apgd_2020100_n1000.json</code></td></tr><tr><td>ramp_ep40_eps8255_apgd_n1000</td><td>74.5</td><td>44.7</td><td>61.1</td><td>46.4</td><td><strong>43.6</strong></td><td>—</td><td>repro</td><td>8/255</td><td></td><td>1000</td><td>apgd</td><td><code>ramp/eval_ramp_ep40_eps8255_apgd_n1000.json</code></td></tr><tr><td>ramp_ep60_eps8255_apgd_n1000</td><td>75.7</td><td>45.0</td><td>60.9</td><td>46.9</td><td><strong>43.6</strong></td><td>—</td><td>repro</td><td>8/255</td><td></td><td>1000</td><td>apgd</td><td><code>ramp/eval_ramp_ep60_eps8255_apgd_n1000.json</code></td></tr><tr><td>ramp_ep70_eps8255_apgd_n1000</td><td>78.3</td><td>43.5</td><td>64.3</td><td>47.7</td><td><strong>43.1</strong></td><td>—</td><td>repro</td><td>8/255</td><td></td><td>1000</td><td>apgd</td><td><code>ramp/eval_ramp_ep70_eps8255_apgd_n1000.json</code></td></tr><tr><td>ramp_ep50_eps8255_apgd_n1000</td><td>77.5</td><td>43.9</td><td>61.9</td><td>47.1</td><td><strong>42.9</strong></td><td>—</td><td>repro</td><td>8/255</td><td></td><td>1000</td><td>apgd</td><td><code>ramp/eval_ramp_ep50_eps8255_apgd_n1000.json</code></td></tr><tr><td>ramp_ep30_eps8255_apgd_n1000</td><td>72.7</td><td>43.4</td><td>57.2</td><td>46.4</td><td><strong>42.4</strong></td><td>—</td><td>repro</td><td>8/255</td><td></td><td>1000</td><td>apgd</td><td><code>ramp/eval_ramp_ep30_eps8255_apgd_n1000.json</code></td></tr><tr><td>ramp_ep20_eps8255_apgd_n1000</td><td>70.3</td><td>41.6</td><td>55.7</td><td>43.6</td><td><strong>40.7</strong></td><td>—</td><td>repro</td><td>8/255</td><td></td><td>1000</td><td>apgd</td><td><code>ramp/eval_ramp_ep20_eps8255_apgd_n1000.json</code></td></tr><tr><td>predictive_ks4_apgd_8255_s0</td><td>78.4</td><td>41.1</td><td>61.2</td><td>46.9</td><td><strong>39.8</strong></td><td>0.611</td><td>in-house</td><td>8/255</td><td></td><td>1000</td><td>apgd</td><td><code>predictive_ks4_apgd_8255/s0/eval.json</code></td></tr><tr><td>predictive_ks2_apgd_8255_s0</td><td>77.2</td><td>41.4</td><td>59.9</td><td>44.2</td><td><strong>39.4</strong></td><td>0.580</td><td>in-house</td><td>8/255</td><td></td><td>1000</td><td>apgd</td><td><code>predictive_ks2_apgd_8255/s0/eval.json</code></td></tr><tr><td>predictive_ks8_apgd_8255_s0</td><td>77.7</td><td>41.0</td><td>59.9</td><td>45.7</td><td><strong>39.3</strong></td><td>0.622</td><td>in-house</td><td>8/255</td><td></td><td>1000</td><td>apgd</td><td><code>predictive_ks8_apgd_8255/s0/eval.json</code></td></tr><tr><td>idea1_failrate_ramp80_apgd_8255_s0</td><td>76.0</td><td>40.4</td><td>59.0</td><td>45.7</td><td><strong>39.0</strong></td><td>0.759</td><td>repro</td><td>8/255</td><td></td><td>1000</td><td>apgd</td><td><code>idea1_failrate_ramp80_apgd_8255/s0/eval.json</code></td></tr><tr><td>reactive_apgd_8255_s0</td><td>76.7</td><td>39.2</td><td>60.1</td><td>45.6</td><td><strong>38.8</strong></td><td>—</td><td>in-house</td><td>8/255</td><td></td><td>1000</td><td>apgd</td><td><code>reactive_apgd_8255/s0/eval.json</code></td></tr><tr><td>predictive_apgd_8255_s0</td><td>76.1</td><td>40.3</td><td>59.9</td><td>44.8</td><td><strong>38.7</strong></td><td>0.653</td><td>in-house</td><td>8/255</td><td></td><td>1000</td><td>apgd</td><td><code>predictive_apgd_8255/s0/eval.json</code></td></tr><tr><td>ramp_ep10_eps8255_apgd_n1000</td><td>62.5</td><td>34.1</td><td>49.3</td><td>37.9</td><td><strong>33.3</strong></td><td>—</td><td>repro</td><td>8/255</td><td></td><td>1000</td><td>apgd</td><td><code>ramp/eval_ramp_ep10_eps8255_apgd_n1000.json</code></td></tr></tbody></table></div>
+    </section>
+    <section>
+      <h2>RAMP union-vs-epoch curve @8/255 (n=1000, APGD, restarts=1)</h2>
+      <figure class="ch-fig"><svg viewBox="0 0 760 320" class="ch-svg" role="img" aria-label="RAMP worst-union robust accuracy versus training epoch at eps 8/255, APGD n=1000"><line x1="54" y1="274.0" x2="668" y2="274.0" class="ch-grid"/><text x="46" y="278.0" class="ch-ylab" text-anchor="end">30</text><line x1="54" y1="204.0" x2="668" y2="204.0" class="ch-grid"/><text x="46" y="208.0" class="ch-ylab" text-anchor="end">35</text><line x1="54" y1="134.0" x2="668" y2="134.0" class="ch-grid"/><text x="46" y="138.0" class="ch-ylab" text-anchor="end">40</text><line x1="54" y1="64.0" x2="668" y2="64.0" class="ch-grid"/><text x="46" y="68.0" class="ch-ylab" text-anchor="end">45</text><line x1="580.3" y1="22" x2="580.3" y2="274" class="ch-anno"/><text x="573.3" y="34" class="ch-annolab" text-anchor="end">lr-drop 0.05→0.005 @ep70</text><polyline points="54.0,227.8 141.7,124.2 229.4,100.4 317.1,83.6 404.9,93.4 492.6,83.6 580.3,90.6 668.0,50.0" class="ch-line"/><circle cx="54.0" cy="227.8" r="4.5" class="ch-dot"><title>ep10: union 33.3%</title></circle><circle cx="141.7" cy="124.2" r="4.5" class="ch-dot"><title>ep20: union 40.7%</title></circle><circle cx="229.4" cy="100.4" r="4.5" class="ch-dot"><title>ep30: union 42.4%</title></circle><circle cx="317.1" cy="83.6" r="4.5" class="ch-dot"><title>ep40: union 43.6%</title></circle><circle cx="404.9" cy="93.4" r="4.5" class="ch-dot"><title>ep50: union 42.9%</title></circle><circle cx="492.6" cy="83.6" r="4.5" class="ch-dot"><title>ep60: union 43.6%</title></circle><circle cx="580.3" cy="90.6" r="4.5" class="ch-dot"><title>ep70: union 43.1%</title></circle><circle cx="668.0" cy="50.0" r="4.5" class="ch-dot"><title>ep80: union 46.0%</title></circle><text x="676.0" y="54.0" class="ch-endlab">46.0</text><text x="54.0" y="218.8" class="ch-lab" text-anchor="middle">33.3</text><text x="54.0" y="244.8" class="ch-lab" text-anchor="middle">33.3</text><text x="54.0" y="292" class="ch-xlab" text-anchor="middle">10</text><text x="141.7" y="292" class="ch-xlab" text-anchor="middle">20</text><text x="229.4" y="292" class="ch-xlab" text-anchor="middle">30</text><text x="317.1" y="292" class="ch-xlab" text-anchor="middle">40</text><text x="404.9" y="292" class="ch-xlab" text-anchor="middle">50</text><text x="492.6" y="292" class="ch-xlab" text-anchor="middle">60</text><text x="580.3" y="292" class="ch-xlab" text-anchor="middle">70</text><text x="668.0" y="292" class="ch-xlab" text-anchor="middle">80</text><text transform="rotate(-90)" x="-148.0" y="15" class="ch-axtitle" text-anchor="middle">worst-union robust acc (%)</text><text x="361.0" y="314" class="ch-axtitle" text-anchor="middle">training epoch</text></svg><figcaption class="ch-cap">RAMP union vs epoch @8/255 (APGD n=1000) — plateaus ~43 across ep30–70, jumps to 46 only after the ep70 lr-drop; ep50 (42.9) is a local trough.</figcaption></figure>
+    </section>
+    <section>
+      <h2>Findings — mechanism spine (F1–F9)</h2>
+      <p style="margin:0 0 8px;color:var(--muted);font-size:.85rem;">Source type:
+        <span class="ftag ftag-in-house">IN-HOUSE</span>
+        <span class="ftag ftag-cited">CITED</span>
+        <span class="ftag ftag-cross-confirmed">CROSS-CONFIRMED</span> — tiers never mixed.</p>
+      <p>No <code>results/findings.json</code>.</p>
+    </section>
+    <section>
+      <h2>Open Decisions</h2>
+      <ul>
+<li>Kiet-requested next controlled comparison: seed-0 full-80 Colab/RAMP80 batch under the locked protocol. Run develop eval APGD <code>20/20/100</code> after each run; run full AutoAttack only for the batch winner after the batch is complete.</li>
+<li>Batch order:</li>
+</ul>
+<p>  1. control fixed-10: <code>configs/paper/reactive_ramprecipe.yaml</code></p>
+<p>  2. flat-6: <code>configs/exploration/flat6_ramp80.yaml</code></p>
+<p>  3. predbind ks4: pin config plus kspan/floor before launch (<code>__TBD__</code>)</p>
+<p>  4. curriculum-rescaled: <code>configs/exploration/idea3_curriculum_ramp80.yaml</code></p>
+<p>  5. idea1 fail-rate: <code>configs/exploration/idea1_failrate_ramp80.yaml</code></p>
+<ul>
+<li>Active writer status: no <code>scripts/train.py</code> process at 2026-07-09 01:30 UTC. Run #5 idea1 fail-rate has completed to <code>results/idea1_failrate_ramp80_apgd_8255/s0/</code> with <code>ckpt/ep080.pt</code>, <code>ckpt/last.pt</code>, <code>train.json</code>, and <code>eval.json</code>; do not overwrite those files.</li>
+<li>Control fixed-10 eval is BLOCKED until <code>results/reactive_ramprecipe/s0/ckpt/best.pt</code> exists from the control training run. Requested command: <code>python scripts/evaluate.py --config configs/paper/base_ramp_apgd_8255.yaml --checkpoint results/reactive_ramprecipe/s0/ckpt/best.pt --version apgd --n-examples 1000 --bs 250</code>. Current <code>evaluate.py</code> would otherwise infer run name <code>best</code> from <code>best.pt</code>, so use <code>--run-name reactive_ramprecipe</code> or <code>--out results/reactive_ramprecipe/s0/eval.json</code> when actually running it.</li>
+<li>W&amp;B online preflight passed on 2026-07-08 for run names <code>idea1_failrate_ramp80_apgd_8255_s0</code>, <code>idea2_kmin_recovery_ramp80_apgd_8255_s0</code>, and <code>idea3_curriculum_ramp80_apgd_8255_s0</code>.</li>
+</ul>
+<h3>Pre-registration Placeholders</h3>
+<ul>
+<li>Winner rule / union threshold: <code>__TBD__</code></li>
+<li>Per-norm floors and l1 risk tolerance: <code>__TBD__</code></li>
+<li>Predbind ks4 kspan/floor: <code>__TBD__</code></li>
+</ul>
+    </section>
+    <section>
+      <h2>Run-Update Checklist</h2>
+      <ul>
+<li>Check for active writers before editing summaries or regenerating dashboard.</li>
+<li>For each meaningful run/eval: record run name, seed, config path, git commit, epoch, union, per-norm robust acc, FLOPs ratio, schedule, and paper/exploration role.</li>
+<li>Update this file first.</li>
+<li>Regenerate <code>docs/dashboard.html</code> from this file plus result JSONs when safe.</li>
+<li>Keep paper-lane configs under <code>configs/paper/</code>; keep exploration under <code>configs/exploration/</code>; keep smoke/dev under <code>configs/dev/</code>.</li>
+<li>Do not launch training/eval from cleanup/review turns unless Kiet explicitly asks.</li>
+</ul>
+    </section>
+    <section>
+      <h2>Notes</h2>
+      <textarea id="notes" placeholder="Private annotations stay in this browser via localStorage."></textarea>
+      <p class="meta">Notes are local to your browser and are not written back to the repo.</p>
+    </section>
+  </main>
+  <script>
+    const key = "attackdro.dashboard.notes.v1";
+    const notes = document.getElementById("notes");
+    notes.value = localStorage.getItem(key) || "";
+    notes.addEventListener("input", () => localStorage.setItem(key, notes.value));
+    function filterTier() {
+      const v = document.getElementById("tierFilter").value;
+      document.querySelectorAll(".cmp-row").forEach(row => {
+        row.style.display = (v === "all" || row.dataset.tier === v) ? "" : "none";
+      });
+    }
+  </script>
+</body>
+</html>

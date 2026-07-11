@@ -1,0 +1,17 @@
+# EXPLORATION Idea 2 — k_min self-recovery (Colab, NOT paper-grade).
+# CARD-PB v2 EXACTLY as de-risk, but kspan=4, k_min=1: feedback alive (kspan>0) and floor CAN
+# drop to 1 then climb as miss_vol rises. Tests whether the miss_vol feedback self-corrects.
+# Read floor/{norm} EVERY epoch (the trajectory IS the result) + final l1 eval vs de-risk 45.6.
+# lr/milestones match the paper recipe (same as the de-risk run's --set overrides).
+_base_: configs/legacy/cardpb_v2_paper_demoted.yaml
+run_name: idea2_kmin_recovery
+results_dir: results/exploration/
+wandb:
+  tags: ["exploration:true", "device:colab", "idea:2_kmin_recovery"]
+train:
+  epochs: 30
+  lr: 0.05
+  milestones: [70]
+  groupdro:
+    pb_floor_kspan: 4           # feedback alive (kspan>0 needed for recovery)
+    pb_k_floor: 1               # floor can drop to 1 (avoids k_min=0 deadlock) then climb

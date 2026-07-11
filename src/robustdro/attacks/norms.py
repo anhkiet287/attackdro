@@ -143,6 +143,50 @@ def _proj_l1ball(x, eps):
     return y * x.sign()
 
 
+def msd_v0(model, x, y, eps_linf, eps_l2, eps_l1,
+           alpha_linf=0.003, alpha_l2=0.05, alpha_l1=0.05, steps=50):
+    """MSD (multi steepest descent) training attack — faithful fp32 port of
+    locuslab/robust_union CIFAR10/cifar_funcs.py::msd_v0 at commit ef34194
+    (2024-07-16). Per step: ONE gradient, three candidate steps (l2/linf/l1),
+    keep per-sample the candidate with max loss (3 extra forwards). Their
+    defaults kept: alphas (0.003, 0.05, 0.05), steps=50, k~U{5..20} for l1.
+    """
+    was_training = model.training
+    model.eval()
+    delta = torch.zeros_like(x)
+    for _ in range(steps):
+        delta.requires_grad_(True)
+        loss = nn.functional.cross_entropy(model(x + delta), y)
+        grad = torch.autograd.grad(loss, delta)[0]
+        with torch.no_grad():
+            d = delta.detach()
+            # l2 candidate
+            d_l2 = d + alpha_l2 * grad / _l2n(grad).clamp(min=1e-12)
+            d_l2 = d_l2 * (eps_l2 / _l2n(d_l2).clamp(min=eps_l2))
+            d_l2 = torch.min(torch.max(d_l2, -x), 1 - x)
+            # linf candidate
+            d_linf = (d + alpha_linf * grad.sign()).clamp(-eps_linf, eps_linf)
+            d_linf = torch.min(torch.max(d_linf, -x), 1 - x)
+            # l1 candidate (their in-loop k/alpha schedule)
+            kk = int(torch.randint(5, 21, (1,)).item())
+            a1 = (alpha_l1 / kk) * 20.0
+            d_l1 = d + a1 * _l1_dir_topk(grad, d, x, a1, kk)
+            d_l1 = _proj_l1ball(d_l1, eps_l1)
+            d_l1 = torch.min(torch.max(d_l1, -x), 1 - x)
+            # pick per-sample max-loss candidate
+            best = d.clone()
+            best_loss = torch.full((x.shape[0],), -1.0, device=x.device)
+            for cand in (d_l1, d_l2, d_linf):
+                lc = nn.functional.cross_entropy(model(x + cand), y, reduction="none")
+                m = lc >= best_loss
+                best[m] = cand[m]
+                best_loss = torch.max(best_loss, lc)
+            delta = best
+    if was_training:
+        model.train()
+    return (x + delta).detach()
+
+
 def pgd_l1_topk(model, x, y, eps, step_size, steps, k=20, gap=0.05,
                 random_k=True, random_start=False):
     """L1 top-k PGD (sparse steepest descent + L1-ball projection).

@@ -1,7 +1,7 @@
 """eval_union — the P0 linchpin.
 
 Evaluate a model's worst-case robust accuracy over the UNION of (linf, l2, l1)
-threat models under the shared protocol (configs/base.yaml). This harness is
+threat models under the shared paper protocol. This harness is
 kept independent of training (golden rule #4) and is used for BOTH self-trained
 checkpoints and downloaded baselines re-evaluated with our attack config.
 
@@ -41,6 +41,31 @@ def load_test_subset(cfg, n_examples=None, device="cpu"):
     xs = torch.stack([ds[i][0] for i in range(n)])
     ys = torch.tensor([ds[i][1] for i in range(n)])
     return xs, ys
+
+
+def load_eval_checkpoint(checkpoint_path: str, cfg: dict, model_family: str = "robustdro",
+                         device: str = "cuda"):
+    """Load a checkpoint for evaluation.
+
+    model_family="robustdro" preserves the existing in-repo checkpoint format.
+    model_family="ramp" loads upstream RAMP PreActResNet18 checkpoints from
+    external/RAMP with activation="softplus1" and no input normalization.
+    """
+    if model_family == "ramp":
+        from ..models import load_ramp_checkpoint
+
+        return load_ramp_checkpoint(checkpoint_path, device=device), None
+    if model_family != "robustdro":
+        raise ValueError("Unknown model_family {!r}. Use 'robustdro' or 'ramp'.".format(model_family))
+
+    from ..models import build_model
+
+    ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    model_cfg = ckpt.get("cfg", cfg)
+    model = build_model(model_cfg)
+    model.load_state_dict(ckpt["model"])
+    model.to(device).eval()
+    return model, ckpt
 
 
 def evaluate_union(model, x, y, cfg, norms=("linf", "l2", "l1"),

@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AttackDRO — Landscape</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --surface:#ffffff; --ink:#0f172a; --mut:#64748b; --line:#e2e8f0;
+    --accent:#2563eb; --slate:#64748b; --good:#15803d; --warn:#b45309; --band:#e8edf5;
+    --paper:#15803d; --expl:#7c3aed;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#0b1120; --surface:#111a2e; --ink:#e8edf6; --mut:#94a3b8; --line:#22304d;
+      --accent:#5b9cff; --slate:#8595ab; --good:#4ade80; --warn:#fbbf24; --band:#182444;
+      --paper:#4ade80; --expl:#a78bfa; }
+  }
+  :root[data-theme=dark]{ --bg:#0b1120; --surface:#111a2e; --ink:#e8edf6; --mut:#94a3b8; --line:#22304d; --accent:#5b9cff; --slate:#8595ab; --good:#4ade80; --warn:#fbbf24; --band:#182444; --paper:#4ade80; --expl:#a78bfa; }
+  :root[data-theme=light]{ --bg:#f6f7f9; --surface:#ffffff; --ink:#0f172a; --mut:#64748b; --line:#e2e8f0; --accent:#2563eb; --slate:#64748b; --good:#15803d; --warn:#b45309; --band:#e8edf5; --paper:#15803d; --expl:#7c3aed; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:1040px;margin:0 auto;padding:28px 20px 60px}
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+  h1{font-size:23px;margin:0;letter-spacing:-.3px}
+  .tag{color:var(--mut);font-size:14px}
+  a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
+  .hero{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:16px 0 22px}
+  .hero b{color:var(--accent)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:760px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .card h2{font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);margin:0 0 10px}
+  .card.full{grid-column:1/-1}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line)}
+  .pill.good{color:var(--good);border-color:var(--good)}
+  .pill.run{color:var(--accent);border-color:var(--accent)}
+  .num{font-variant-numeric:tabular-nums;font-weight:700}
+  .lane{border-left:3px solid var(--line);padding-left:12px;margin:10px 0}
+  .lane.paper{border-color:var(--paper)} .lane.expl{border-color:var(--expl)}
+  .lane b{font-size:13px} .lane .k{font-size:12px;font-weight:700;letter-spacing:.5px}
+  .lane.paper .k{color:var(--paper)} .lane.expl .k{color:var(--expl)}
+  .spine{display:flex;flex-direction:column;gap:6px}
+  .f{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:baseline;padding:5px 0;border-top:1px solid var(--line)}
+  .f:first-child{border-top:0}
+  .f .id{font-weight:800;color:var(--mut);font-size:13px}
+  .f.hl .id{color:var(--accent)}
+  .f small{color:var(--mut)}
+  svg{display:block;max-width:100%;height:auto}
+  .foot{color:var(--mut);font-size:12.5px;margin-top:22px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>AttackDRO — CARD-PB</h1>
+    <span class="tag">difficulty-aware adversarial training · CIFAR-10 union (ℓ∞ 8/255 · ℓ2 0.5 · ℓ1 12) · PreActResNet-18</span>
+  </header>
+  <div class="tag" style="margin-bottom:8px"><a href="dashboard.html">→ full dashboard</a> · orientation page (the whole picture at a glance)</div>
+
+  <div class="hero">
+    <b>Central claim (paper spine):</b> <i>predictive</i> binding-aware AT matches <i>reactive</i> union
+    robustness at <b>lower attack-FLOPs</b> — accuracy-<i>per-FLOP</i>, not leaderboard-beating. The
+    mechanism story F1–F9 stands even if the efficiency win doesn't.
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>The method — CARD-PB v2</h2>
+      <p style="margin:.2em 0">An EMA predictor <b>φ</b> guesses each sample's <i>binding</i> norm →
+      <b>full</b> attack budget on that norm, a <b>floor</b> on the others. The floor is
+      <b>adaptive per-norm via miss-volume</b> (no ℓ1 hardcoding — in the de-risk ℓ∞ earned a
+      <i>higher</i> floor than ℓ1, which no hardcoding could produce).</p>
+      <p style="margin:.4em 0 0;color:var(--mut);font-size:13px">Reactive predecessor = per-sample soft-T=0.25.
+      Both craft with APGD; efficiency = predictive APGD-passes ÷ reactive APGD-passes.</p>
+    </div>
+
+    <div class="card">
+      <h2>Current state</h2>
+      <p style="margin:.2em 0"><span class="pill good">DE-RISK POSITIVE</span> &nbsp;<span class="pill run">FRONTIER RUNNING</span></p>
+      <p style="margin:.5em 0 0">Predictive ks16 union <span class="num">38.7</span> vs reactive
+      <span class="num">38.8</span> (Δ −0.10) at <span class="num">0.665×</span> attack-FLOPs, ℓ1 holds
+      (−0.80pp) — <b>NOT F9 again</b>. Sweep <b>{2,4,8,16,24}</b> maps the ≤0.60 ℓ1-hold operating point.</p>
+    </div>
+
+    <div class="card full">
+      <h2>Where it sits — SOTA cluster + the efficiency axis</h2>
+      <svg viewBox="0 0 900 300" role="img" aria-label="union vs attack-FLOPs">
+        <!-- axes -->
+        <g font-family="inherit" font-size="12" fill="var(--mut)">
+          <!-- SOTA cluster band 42-44 -->
+          <rect x="70" y="46" width="770" height="46" fill="var(--band)"/>
+          <text x="836" y="42" text-anchor="end">SOTA cluster 42–44 (ℓ∞/ℓ2/ℓ1 final): MAX 44.0 · MSD 43.9 · RAMP@50 42.9 · E-AT 42.4 — the ep80 target</text>
+          <!-- y grid -->
+          <g stroke="var(--line)" stroke-width="1">
+            <line x1="70" y1="46" x2="840" y2="46"/><line x1="70" y1="92" x2="840" y2="92"/>
+            <line x1="70" y1="160" x2="840" y2="160"/><line x1="70" y1="250" x2="840" y2="250"/>
+          </g>
+          <text x="62" y="50" text-anchor="end">44</text><text x="62" y="96" text-anchor="end">42</text>
+          <text x="62" y="164" text-anchor="end">40</text><text x="62" y="254" text-anchor="end">38</text>
+          <text x="30" y="150" transform="rotate(-90 30 150)" text-anchor="middle" fill="var(--ink)" font-weight="600">worst-case union (%)</text>
+          <!-- x axis -->
+          <line x1="70" y1="250" x2="840" y2="250" stroke="var(--line)"/>
+          <text x="785" y="272">1.00</text><text x="452" y="272">0.665</text><text x="240" y="272">0.60</text>
+          <text x="455" y="292" text-anchor="middle" fill="var(--ink)" font-weight="600">attack-FLOPs ratio (÷ full 10/10/10)  →  cheaper = left</text>
+          <!-- 0.60 target line -->
+          <line x1="248" y1="46" x2="248" y2="250" stroke="var(--warn)" stroke-dasharray="4 4" stroke-width="1.5"/>
+          <text x="248" y="60" fill="var(--warn)" text-anchor="middle" font-size="11">≤0.60 target</text>
+        </g>
+        <!-- efficiency win: reactive (1.0, 38.8) -> predictive (0.665, 38.7), same union -->
+        <g>
+          <!-- reactive at x=785 (1.0), union 38.8 -> y ~ 214 ; predictive x=452 (0.665) y ~215 -->
+          <line x1="770" y1="214" x2="470" y2="215" stroke="var(--accent)" stroke-width="2" marker-end="url(#ar)"/>
+          <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--accent)"/></marker></defs>
+          <circle cx="785" cy="214" r="6" fill="var(--slate)" stroke="var(--surface)" stroke-width="2"/>
+          <circle cx="452" cy="215" r="6" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>
+          <text x="798" y="212" font-size="12.5" fill="var(--slate)" font-weight="700">reactive 38.8</text>
+          <text x="452" y="205" font-size="12.5" fill="var(--accent)" font-weight="700" text-anchor="middle">predictive 38.7</text>
+          <text x="610" y="205" font-size="11.5" fill="var(--accent)" text-anchor="middle">same union, −33% attack-FLOPs</text>
+        </g>
+      </svg>
+      <p style="margin:.4em 0 0;color:var(--mut);font-size:13px">Honest read: the two points are <b>ep50 pre-drop</b>
+      (both ~38.7, below the cluster). The win is the <b>arrow</b> — equal union at 0.665× compute. The cluster
+      42–44 is the <b>ep80 target</b> (RAMP reaches 46 only after the ep70 lr-drop). We compete <i>in</i> the
+      cluster on <b>efficiency</b>, a separate axis — not 4pp behind a point.</p>
+    </div>
+
+    <div class="card">
+      <h2>Two lanes</h2>
+      <div class="lane paper"><span class="k">PAPER · 5070ti</span><br>
+        <b>frontier → seeds → Phase-2.</b> Source of every paper claim. F1–F9, PROJECT_STATE, dashboard,
+        EXPERIMENT_TABLE, CARD-PB_v2. Full-AA for claim rows.</div>
+      <div class="lane expl"><span class="k">EXPLORATION · Colab</span><br>
+        <b>gated, signal-only.</b> Ideas 1–3 (fail-rate / k_min-recovery / curriculum) + RAMP-generality graft.
+        Writes only to <code>results/exploration/</code>; never the paper table. Kiet decides ports.</div>
+    </div>
+
+    <div class="card">
+      <h2>Mechanism spine — F1–F9</h2>
+      <div class="spine">
+        <div class="f"><span class="id">F1</span><span>Weak/uniform ℓ1 attacks <b>overstate</b> ℓ1 → eval ℓ1-heavy. <small>cross-confirmed</small></span></div>
+        <div class="f"><span class="id">F3</span><span>ℓ2 largely <b>free/spillover</b> → stays thin-floor. <small>in-house</small></span></div>
+        <div class="f"><span class="id">F4</span><span>Loss-signal GroupDRO neutral-to-harmful; <b>signal choice is first-order</b>. <small>in-house</small></span></div>
+        <div class="f"><span class="id">F6</span><span>Binding is a <b>short-horizon TRAIT</b> (ℓ1 excess +53.8pp, κ0.60) → predictive weighting viable. <small>decision-grade</small></span></div>
+        <div class="f"><span class="id">F7</span><span>Recipe/source confounds are huge → <b>single-recipe reset</b>; report the epoch curve. <small>in-house</small></span></div>
+        <div class="f"><span class="id">F8</span><span>Hard MAX ~10× more seed-variable than soft-T → <b>soft &gt; hard</b>. <small>in-house</small></span></div>
+        <div class="f hl"><span class="id">F9</span><span>First predictive negative was <b>bug-driven</b> (R1 inert-floor → R3 biased-φ → v2 confound).
+          <b>De-risk POSITIVE</b> after fixes+APGD → now an efficiency <b>frontier</b>. <small>decision-grade</small></span></div>
+      </div>
+      <p style="margin:.5em 0 0;color:var(--mut);font-size:12.5px">Full F1–F9 cards + F9 chain in the <a href="dashboard.html">dashboard</a>.</p>
+    </div>
+  </div>
+
+  <div class="foot">One-page orientation · not a duplicate of the dashboard · regenerate numbers from PROJECT_STATE §4–6.</div>
+</div>
+</body>
+</html>

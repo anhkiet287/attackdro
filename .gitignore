@@ -22,10 +22,14 @@ outputs/
 results/
 wandb/
 lightning_logs/
+*.log
 
 # Notebooks
 .ipynb_checkpoints/
 notebooks/*.ipynb_outputs/
+notebooks/**/*.ipynb_outputs/
+colab_outputs/
+drive_outputs/
 
 # Editor / OS
 .vscode/
@@ -52,3 +56,7 @@ logs/
 
 # External baseline repos (not ours)
 external/
+
+# leaked ramp virtualenv (never commit)
+.venv-ramp/
+.venv*/

@@ -1,0 +1,63 @@
+# =============================================================================
+# base.yaml — THE PROTOCOL. Shared by every method config via `_base_`.
+#
+# Golden rule #1: the threat model + eps + attack config live here and here
+# ONLY. Method configs (pgd_at.yaml, avg.yaml, ...) inherit this file and may
+# override optimization/method knobs, but MUST NOT redefine threat_model eps or
+# the eval attack. One protocol for all methods.
+# =============================================================================
+
+seed: 0
+device: cuda            # falls back to cpu automatically if unavailable
+
+# ---- Data -------------------------------------------------------------------
+dataset:
+  name: cifar10
+  root: data/
+  num_classes: 10
+  num_workers: 4
+  # Adversarial training operates in [0,1] pixel space (no dataset normalization)
+  # so that epsilon has its literal pixel meaning and attacks are simple to
+  # reason about. Any mean/std standardization happens INSIDE the model (see
+  # model.normalize) — matches the locuslab/robust_union convention.
+
+# ---- Model ------------------------------------------------------------------
+model:
+  arch: preact_resnet18
+  normalize: false        # if true, apply CIFAR-10 mean/std inside the model
+
+# ---- Threat model (union of linf, l2, l1) — LOCKED PROTOCOL ------------------
+# LOCKED 2026-07-01 (P1 Step 0): this is THE protocol for BOTH training and eval
+# (train == eval, no mismatch). We switched eps_inf 8/255 (0.0314) -> 0.03 to
+# match the validated locuslab/robust_union baselines (MSD/LINF/L2/L1/AVG/MAX
+# were trained & reported at eps_inf=0.03). Do not change without re-evaluating
+# every model and baseline under the new value.
+#   linf = 0.03,  l2 = 0.5,  l1 = 12   (robust_union CIFAR-10 convention)
+threat_model:
+  linf:
+    eps: 0.03                   # locked (was 8/255 = 0.03137...) to match baselines
+  l2:
+    eps: 0.5
+  l1:
+    eps: 12.0
+
+# ---- Evaluation attack (strong; used by eval_union) -------------------------
+# Golden rule #4: re-evaluate everything with a strong attack (APGD/AutoAttack)
+# under the SAME eps. These knobs are consumed by src/robustdro/eval.
+# Attack VERSION policy (P1): use `apgd` (APGD-CE + APGD-T) for ALL iteration /
+# head-to-head comparison; reserve `standard` (full AutoAttack) for FINAL paper
+# numbers only. `version` is a CLI flag (scripts/evaluate.py --version).
+eval_attack:
+  linf: { steps: 100, restarts: 1 }
+  l2:   { steps: 100, restarts: 1 }
+  l1:   { steps: 100, restarts: 1 }
+
+# ---- Logging / IO -----------------------------------------------------------
+wandb:
+  mode: online            # online | offline | disabled
+  project: union-robustness-dro
+  entity: null            # null -> your default W&B entity
+  group: null             # optional: group related runs
+  tags: []
+results_dir: results/
+checkpoints_dir: checkpoints/

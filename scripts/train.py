@@ -3,14 +3,14 @@
 
 Examples
 --------
-    # Full PGD-AT run (uses configs/pgd_at.yaml -> inherits configs/base.yaml)
-    python scripts/train.py --config configs/pgd_at.yaml
+    # Paper reactive run under the locked RAMP recipe
+    python scripts/train.py --config configs/paper/reactive_ramprecipe.yaml
 
     # 2-iteration smoke test on GPU (offline wandb, tiny eval)
-    python scripts/train.py --config configs/pgd_at.yaml --smoke
+    python scripts/train.py --config configs/paper/reactive_ramprecipe.yaml --smoke
 
     # Ad-hoc overrides
-    python scripts/train.py --config configs/pgd_at.yaml --epochs 10 --wandb-mode offline
+    python scripts/train.py --config configs/paper/reactive_ramprecipe.yaml --epochs 10 --wandb-mode offline
 """
 
 from __future__ import annotations
@@ -38,6 +38,11 @@ def parse_args():
     p.add_argument("--seed", type=int, default=None)
     p.add_argument("--wandb-mode", choices=["online", "offline", "disabled"], default=None)
     p.add_argument("--run-name", default=None)
+    p.add_argument("--resume", default=None,
+                   help="Resume from a checkpoint path, or 'auto' (=<run>/s<seed>/ckpt/last.pt). "
+                        "Restores model+optimizer+scheduler+epoch+RNG for a valid continuation.")
+    p.add_argument("--save-freq", type=int, default=None,
+                   help="Checkpoint every N epochs (ep010.pt ...) for epoch curves + continuation.")
     p.add_argument(
         "--set", action="append", default=[], metavar="KEY=VALUE",
         help="Generic dotted-key config override, repeatable. "
@@ -60,6 +65,8 @@ def main():
         "seed": args.seed,
         "wandb.mode": args.wandb_mode,
         "run_name": args.run_name,
+        "train.resume": args.resume,
+        "train.save_freq": args.save_freq,
     }
     # Generic --set KEY=VALUE overrides (YAML-parsed, so numbers/bools work).
     import yaml
@@ -72,11 +79,12 @@ def main():
 
     smoke_kwargs = {}
     if args.smoke:
-        cfg["train"]["epochs"] = 1
+        cfg["train"]["epochs"] = args.epochs or 1
         cfg["wandb"]["mode"] = args.wandb_mode or "offline"
         cfg["run_name"] = (cfg.get("run_name") or "run") + "_smoke"
         smoke_kwargs = {"max_steps_per_epoch": 2, "eval_max_batches": 2}
-        print("[smoke] 1 epoch, 2 train steps, 2 eval batches, wandb offline")
+        print(f"[smoke] {cfg['train']['epochs']} epoch(s), 2 train steps, "
+              "2 eval batches, wandb offline unless overridden")
 
     set_seed(cfg["seed"])
     method = cfg.get("method", "pgd_at")

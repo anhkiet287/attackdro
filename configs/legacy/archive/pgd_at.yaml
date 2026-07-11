@@ -1,0 +1,27 @@
+# =============================================================================
+# pgd_at.yaml — PGD-AT (Madry et al.) on linf. A P0 baseline.
+# Inherits the protocol from base.yaml; only optimization + the TRAINING attack
+# are defined here. The eps comes from base.threat_model.linf.eps.
+# =============================================================================
+_base_: configs/legacy/base.yaml
+
+method: pgd_at
+run_name: pgd_at_linf
+
+train:
+  epochs: 100
+  batch_size: 128
+  lr: 0.1
+  momentum: 0.9
+  weight_decay: 0.0005
+  lr_schedule: multistep    # step LR: drop x0.1 at the milestones below
+  milestones: [50, 75]      # as fractions handled in trainer? no — absolute epochs
+  # Training-time adversary: PGD-linf at the protocol eps (base.threat_model.linf.eps)
+  attack:
+    norm: linf
+    steps: 10
+    step_size: 0.00784313725490196   # 2/255
+    random_start: true
+  # Robust-accuracy probe reported each epoch during training (cheap, NOT the
+  # final eval — that is eval_union with APGD).
+  eval_pgd_steps: 20

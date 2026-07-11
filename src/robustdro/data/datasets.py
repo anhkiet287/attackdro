@@ -3,7 +3,7 @@
 Images are kept in raw [0,1] pixel space (ToTensor only) — NO normalization
 transform. Standardization, if any, happens inside the model so that adversarial
 epsilons keep their literal pixel meaning (see models/preact_resnet.py and
-configs/base.yaml). Train-time augmentation is the standard random-crop + flip.
+the active paper config). Train-time augmentation is the standard random-crop + flip.
 """
 
 from __future__ import annotations
@@ -68,3 +68,27 @@ def get_train_holdout(cfg: dict, download: bool = False):
     xs = torch.stack([ds[i][0] for i in idx])
     ys = torch.tensor([ds[i][1] for i in idx])
     return xs, ys
+
+
+def get_train_probe_batch(cfg: dict, size: int = 512, seed: int | None = None,
+                          download: bool = False):
+    """Fixed, deterministic train-set probe tensors with sample indices.
+
+    This is for binding-norm trait-vs-state diagnostics: use the same raw train
+    images every epoch, with no random crop/flip, so per-sample identities are
+    trackable over time. If a held-out validation tail is configured, sample only
+    from the actual training pool.
+    """
+    dcfg = cfg["dataset"]
+    ds = _DATASETS[dcfg["name"]](root=dcfg["root"], train=True, download=download,
+                                 transform=T.Compose([T.ToTensor()]))
+    holdout = dcfg.get("val_holdout", 0)
+    train_n = len(ds) - holdout
+    if train_n <= 0:
+        raise ValueError(f"Invalid train probe pool: len={len(ds)}, holdout={holdout}")
+    n = min(int(size), train_n)
+    g = torch.Generator().manual_seed(cfg.get("seed", 0) if seed is None else int(seed))
+    indices = torch.randperm(train_n, generator=g)[:n].sort().values
+    xs = torch.stack([ds[int(i)][0] for i in indices])
+    ys = torch.tensor([ds[int(i)][1] for i in indices], dtype=torch.long)
+    return xs, ys, indices.to(torch.long)
