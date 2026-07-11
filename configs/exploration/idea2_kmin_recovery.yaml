@@ -3,7 +3,7 @@
 # drop to 1 then climb as miss_vol rises. Tests whether the miss_vol feedback self-corrects.
 # Read floor/{norm} EVERY epoch (the trajectory IS the result) + final l1 eval vs de-risk 45.6.
 # lr/milestones match the paper recipe (same as the de-risk run's --set overrides).
-_base_: configs/paper/cardpb_v2.yaml
+_base_: configs/legacy/cardpb_v2_paper_demoted.yaml
 run_name: idea2_kmin_recovery
 results_dir: results/exploration/
 wandb:
