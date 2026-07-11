@@ -1,9 +1,13 @@
 # AttackDRO
 
-Difficulty-aware adversarial training for CIFAR-10 union robustness over linf, l2, and l1.
+AttackDRO studies compute-efficient predictive versus static allocation for multi-norm adversarial training on CIFAR-10 with PreActResNet-18 and ℓ∞/ℓ2/ℓ1 threats.
 
-Active research state lives in [`docs/STATE.md`](docs/STATE.md). Historical state lives in [`docs/STATE_LOG.md`](docs/STATE_LOG.md). The human dashboard is generated from current state plus result JSONs.
+Start here:
 
-Current paper protocol: CIFAR-10, PreActResNet-18, raw `[0,1]` pixels, eps `(8/255, 0.5, 12)`, RAMP schedule, APGD train `10/10/10`, develop eval `20/20/100`, final eval full AutoAttack.
+- [`docs/STATE.md`](docs/STATE.md) — current-state authority and active gates.
+- [`docs/REPO_MAP.md`](docs/REPO_MAP.md) — repository index.
+- [`results/MANIFEST.md`](results/MANIFEST.md) — run retention and canonical-status index.
+- [`docs/governance/`](docs/governance/) — research charter, roles, and workflow.
+- [`docs/STATE_LOG.md`](docs/STATE_LOG.md) — append-only history, not routine state.
 
-Active work is on `card-pb-fixes` and cleanup branches derived from it; old docs/configs are archived under `docs/legacy/` or `configs/legacy/` and should not be treated as current protocol.
+Current decision-grade evaluation uses APGD 20/20/100 on `val_select`; final full AutoAttack is reserved for an explicitly frozen winner.
