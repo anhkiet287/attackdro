@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build docs/dashboard.html from PROJECT_STATE plus result JSON files."""
+"""Build docs/dashboard.html from STATE plus result JSON files."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 RESULTS = ROOT / "results"
-STATE = DOCS / "PROJECT_STATE.md"
+STATE = DOCS / "STATE.md"
 OUT = DOCS / "dashboard.html"
 
 
@@ -80,6 +80,10 @@ class ResultRow:
     n: Any
     version: str
     source: str
+    role: str = ""
+    split: str = ""
+    checkpoint: str = ""
+    used_for_selection: Any = None
     tier: str = "in-house"
     eps: str = ""
     flag: str = ""
@@ -122,6 +126,23 @@ def norm_value(metrics: dict, per_norm: dict, norm: str) -> Any:
     if value is not None:
         return value
     return pick(per_norm, norm, "l_inf") if per_norm else None
+
+
+def prefixed_norm_value(metrics: dict, prefix: str, norm: str) -> Any:
+    value = pick(metrics, f"{prefix}/robust_{norm}")
+    if value is not None:
+        return value
+    if norm == "linf":
+        return pick(metrics, f"{prefix}/robust_l_inf")
+    return None
+
+
+def selection_label(value: Any) -> str:
+    if value is True:
+        return "yes"
+    if value is False:
+        return "no"
+    return ""
 
 
 def train_flops_for_eval(path: Path) -> float | None:
@@ -183,6 +204,7 @@ def load_results() -> list[ResultRow]:
                         n=protocol.get("n_examples", ""),
                         version=str(protocol.get("version", "")),
                         source=str(path.relative_to(RESULTS)),
+                        role="reference",
                         tier="official",
                         eps=eps_label(payload),
                     )
@@ -213,6 +235,10 @@ def load_results() -> list[ResultRow]:
                 n=pick(metrics, "n", "n_examples") or payload.get("n_examples", ""),
                 version=str(metrics.get("version", payload.get("version", ""))),
                 source=str(path.relative_to(RESULTS)),
+                role=("final" if "fullaa" in path.name.lower() else "eval"),
+                split=str(metrics.get("eval/split", "")),
+                checkpoint=str(metrics.get("eval/checkpoint_role", metrics.get("eval/checkpoint", ""))),
+                used_for_selection=metrics.get("eval/used_for_selection"),
                 tier=infer_tier(name, path.name),
                 eps=eps_label(payload),
                 flag=eps_flag(payload),
@@ -229,12 +255,68 @@ def load_results() -> list[ResultRow]:
         metrics = payload.get("metrics", payload)
         if not isinstance(metrics, dict):
             continue
-        union = pick(metrics, "eval/worst_union", "worst_union_acc", "worst_union")
-        if union is None:
-            continue
         per_norm = metrics.get("per_norm_robust_acc", {}) or {}
         run = path.parent.parent.name              # results/<run>/s<seed>/eval.json -> <run>
         seed = path.parent.name                    # s<seed>
+        nested_rows = 0
+        for split in ("val_select", "test_monitor"):
+            for checkpoint in ("val_best", "last"):
+                prefix = f"eval/{split}/{checkpoint}"
+                union = pick(metrics, f"{prefix}/worst_union")
+                if union is None:
+                    continue
+                nested_rows += 1
+                rows.append(
+                    ResultRow(
+                        name=f"{run}_{seed}_{split}_{checkpoint}",
+                        clean=pick(metrics, f"{prefix}/clean_acc"),
+                        linf=prefixed_norm_value(metrics, prefix, "linf"),
+                        l2=prefixed_norm_value(metrics, prefix, "l2"),
+                        l1=prefixed_norm_value(metrics, prefix, "l1"),
+                        union=union,
+                        flops=pick(metrics, "efficiency/attack_flops_ratio") or train_flops_for_eval(path),
+                        n=pick(metrics, f"{prefix}/n_examples") or payload.get("n_examples", ""),
+                        version=str(metrics.get("version", payload.get("version", ""))),
+                        source=str(path.relative_to(RESULTS)),
+                        role="develop",
+                        split=split,
+                        checkpoint=checkpoint,
+                        used_for_selection=pick(metrics, f"{prefix}/used_for_selection"),
+                        tier=infer_tier(run, path.name),
+                        eps=eps_label(payload),
+                        flag=eps_flag(payload),
+                    )
+                )
+        final_prefix = "final/test_final"
+        final_union = pick(metrics, f"{final_prefix}/worst_union")
+        if final_union is not None:
+            nested_rows += 1
+            rows.append(
+                ResultRow(
+                    name=f"{run}_{seed}_test_final",
+                    clean=pick(metrics, f"{final_prefix}/clean_acc"),
+                    linf=prefixed_norm_value(metrics, final_prefix, "linf"),
+                    l2=prefixed_norm_value(metrics, final_prefix, "l2"),
+                    l1=prefixed_norm_value(metrics, final_prefix, "l1"),
+                    union=final_union,
+                    flops=pick(metrics, "efficiency/attack_flops_ratio") or train_flops_for_eval(path),
+                    n=pick(metrics, f"{final_prefix}/n_examples") or payload.get("n_examples", ""),
+                    version=str(metrics.get("version", payload.get("version", ""))),
+                    source=str(path.relative_to(RESULTS)),
+                    role="final",
+                    split="test_final",
+                    checkpoint=str(metrics.get("eval/checkpoint_role", metrics.get("eval/checkpoint", ""))),
+                    used_for_selection=False,
+                    tier=infer_tier(run, path.name),
+                    eps=eps_label(payload),
+                    flag=eps_flag(payload),
+                )
+            )
+        if nested_rows:
+            continue
+        union = pick(metrics, "eval/worst_union", "worst_union_acc", "worst_union")
+        if union is None:
+            continue
         suffix = "_fullAA" if "fullAA" in path.stem else ""
         name = f"{run}_{seed}{suffix}"
         rows.append(
@@ -249,6 +331,10 @@ def load_results() -> list[ResultRow]:
                 n=pick(metrics, "n", "n_examples") or payload.get("n_examples", ""),
                 version=str(metrics.get("version", payload.get("version", ""))),
                 source=str(path.relative_to(RESULTS)),
+                role=("final" if suffix else "legacy-eval"),
+                split=str(metrics.get("eval/split", payload.get("eval_split", ""))),
+                checkpoint=str(metrics.get("eval/checkpoint_role", payload.get("checkpoint_role", ""))),
+                used_for_selection=metrics.get("eval/used_for_selection", payload.get("used_for_selection")),
                 tier=infer_tier(name, path.name),
                 eps=eps_label(payload),
                 flag=eps_flag(payload),
@@ -335,7 +421,7 @@ def render_fragment(markdown: str) -> str:
 
 def extract_section_like(markdown: str, needle: str) -> str:
     """Extract the body under the first `## ...<needle>...` header (substring match) —
-    robust to PROJECT_STATE's numbered/decorated headers (e.g. '## 4 · FINDINGS F1-F9')."""
+    robust to STATE's numbered/decorated headers (e.g. '## 4 · FINDINGS F1-F9')."""
     m = re.search(rf"^##\s+.*{re.escape(needle)}.*$", markdown, flags=re.MULTILINE)
     if not m:
         return ""
@@ -355,7 +441,7 @@ def extract_section(markdown: str, title: str) -> str:
 
 
 def status_cards(memory_md: str) -> str:
-    phase = extract_section_like(memory_md, "Current Next Action")
+    phase = extract_section_like(memory_md, "Current phase and allowed next actions")
     candidates = {
         "Phase": "",
         "Gate": "",
@@ -397,10 +483,11 @@ def compare_view(rows: list[ResultRow]) -> str:
             f"{lbl} {fmt_percent(val)}" for lbl, val in (("l∞", r.linf), ("l2", r.l2), ("l1", r.l1))
         )
         flag_html = f'<span class="cmp-flag">⚠ {escape(r.flag)}</span>' if r.flag else ""
+        role_bits = " · ".join(v for v in (r.role, r.split, r.checkpoint) if v) or "eval"
         bars.append(
             f'<div class="cmp-row" data-tier="{escape(r.tier)}">'
             f'<div class="cmp-label">{escape(r.name)}'
-            f'<span class="cmp-meta">{escape(r.tier)} · eps {escape(r.eps or "?")} · {escape(r.version or "?")}{flag_html}</span></div>'
+            f'<span class="cmp-meta">{escape(r.tier)} · {escape(role_bits)} · eps {escape(r.eps or "?")} · {escape(r.version or "?")}{flag_html}</span></div>'
             f'<div class="cmp-track"><div class="cmp-bar" style="width:{width:.1f}%;background:{color}">'
             f'<span class="cmp-val">{fmt_percent(r.union)}</span></div></div>'
             f'<div class="cmp-pernorm">{escape(pernorm)}</div>'
@@ -434,6 +521,10 @@ def results_table(rows: list[ResultRow]) -> str:
             f"<td>{fmt_percent(row.l1)}</td>"
             f"<td><strong>{fmt_percent(row.union)}</strong></td>"
             f"<td>{fmt_flops(row.flops)}</td>"
+            f"<td>{escape(row.role)}</td>"
+            f"<td>{escape(row.split)}</td>"
+            f"<td>{escape(row.checkpoint)}</td>"
+            f"<td>{escape(selection_label(row.used_for_selection))}</td>"
             f"<td>{escape(row.tier)}</td>"
             f"<td>{escape(row.eps)}</td>"
             f"<td>{('⚠ ' + escape(row.flag)) if row.flag else ''}</td>"
@@ -445,7 +536,8 @@ def results_table(rows: list[ResultRow]) -> str:
     return (
         "<div class=\"table-wrap\"><table><thead><tr>"
         "<th>Run</th><th>Clean</th><th>linf</th><th>l2</th><th>l1</th>"
-        "<th>Union</th><th>FLOPs</th><th>Tier</th><th>eps</th><th>Flag</th><th>n</th><th>Version</th><th>Source</th>"
+        "<th>Union</th><th>FLOPs</th><th>Role</th><th>Split</th><th>Checkpoint</th><th>Select?</th>"
+        "<th>Tier</th><th>eps</th><th>Flag</th><th>n</th><th>Version</th><th>Source</th>"
         "</tr></thead><tbody>"
         + "".join(body)
         + "</tbody></table></div>"
@@ -819,13 +911,17 @@ def main() -> None:
 <body>
   <header>
     <h1>AttackDRO Dashboard</h1>
-    <p>Regenerated from <code>docs/PROJECT_STATE.md</code> and result JSON files at $generated_at. &nbsp;·&nbsp; <a href="landscape.html" style="font-weight:600">→ Landscape (one-page overview)</a></p>
+    <p>Regenerated from <code>docs/STATE.md</code> and result JSON files at $generated_at. &nbsp;·&nbsp; <a href="landscape.html" style="font-weight:600">→ Landscape (one-page overview)</a></p>
   </header>
   <main>
     <div class="status">$status_cards</div>
     <section>
-      <h2>Current Next Action</h2>
+      <h2>Current Phase And Allowed Next Actions</h2>
       $current_next_action
+    </section>
+    <section>
+      <h2>Eval Split Roles</h2>
+      $eval_split_roles
     </section>
     <section>
       <h2>Union robustness by run (compare view)</h2>
@@ -848,7 +944,7 @@ def main() -> None:
       $findings
     </section>
     <section>
-      <h2>Open Decisions</h2>
+      <h2>Known Risks And Blockers</h2>
       $open_items
     </section>
     <section>
@@ -881,13 +977,14 @@ def main() -> None:
     html_page = template.substitute(
         generated_at=escape(generated_at),
         status_cards=status_cards(memory_md),
-        current_next_action=render_fragment(extract_section_like(memory_md, "Current Next Action")),
+        current_next_action=render_fragment(extract_section_like(memory_md, "Current phase and allowed next actions")),
+        eval_split_roles=render_fragment(extract_section_like(memory_md, "Split and checkpoint-selection protocol")),
         compare_view=compare_view(rows),
         results_table=results_table(rows),
         ramp_chart=render_ramp_chart(),
         findings=render_findings(load_findings()),
-        open_items=render_fragment(extract_section_like(memory_md, "Current Next Action")),
-        run_update_checklist=render_fragment(extract_section_like(memory_md, "Run-Update Checklist")),
+        open_items=render_fragment(extract_section_like(memory_md, "Known risks and blockers")),
+        run_update_checklist=render_fragment(extract_section_like(memory_md, "Run-update checklist")),
     )
 
     OUT.write_text(html_page, encoding="utf-8")
