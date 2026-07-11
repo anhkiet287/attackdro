@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ATTACKDRO · AI Lab Roles</title>
+<style>
+  :root {
+    --ink: #12151c;
+    --paper: #eceae3;
+    --paper-2: #e3e0d6;
+    --line: #c9c5b8;
+    --line-strong: #b3ae9e;
+    --muted: #5b5f52;
+    --faint: #8a8d7f;
+    --pass: #2f6b4f;
+    --pass-bg: #d7e6db;
+    --block: #9a6a17;
+    --block-bg: #eee0c4;
+    --wait: #4a5568;
+    --wait-bg: #dcdcd2;
+    --accent: #b5451f;
+    --accent-2: #1f4d5c;
+    --mono: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px; }
+
+  /* Header */
+  header {
+    border-bottom: 2px solid var(--ink);
+    padding: 40px 0 26px;
+    margin-bottom: 8px;
+  }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  h1 {
+    font-size: clamp(30px, 4.6vw, 52px);
+    line-height: 1.02;
+    margin: 12px 0 14px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .standfirst {
+    font-size: 17px;
+    color: var(--muted);
+    max-width: 74ch;
+    margin: 0;
+  }
+  .central-claim {
+    margin-top: 20px;
+    padding: 14px 18px;
+    border-left: 3px solid var(--accent);
+    background: var(--paper-2);
+    font-size: 15px;
+    max-width: 82ch;
+  }
+  .central-claim b { font-variant: small-caps; letter-spacing: 0.03em; }
+  .central-claim .rule { display:block; font-family: var(--mono); font-size: 12.5px; color: var(--ink); margin-top: 8px; }
+
+  /* Status strip */
+  .strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin: 30px 0 44px;
+  }
+  .strip .cell { background: var(--paper); padding: 16px 18px; }
+  .strip .big { font-family: var(--mono); font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+  .strip .cap { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+
+  section { margin: 0 0 52px; }
+  .sec-head {
+    display: flex; align-items: baseline; gap: 14px;
+    border-bottom: 1px solid var(--line-strong);
+    padding-bottom: 8px; margin-bottom: 22px;
+  }
+  .sec-num { font-family: var(--mono); font-size: 13px; color: var(--accent); font-weight: 700; }
+  .sec-head h2 { font-size: 25px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  .sec-head .note { margin-left: auto; font-size: 13px; color: var(--faint); font-family: var(--mono); }
+
+  .lead { font-size: 15.5px; color: var(--muted); max-width: 80ch; margin: 0 0 22px; }
+
+  /* Pipeline (agent layers) */
+  .pipe { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .node {
+    border: 1px solid var(--line-strong);
+    background: var(--paper);
+    padding: 14px 14px 16px;
+    position: relative;
+  }
+  .node .role { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-2); font-weight: 700; }
+  .node .who { font-size: 17px; font-weight: 700; margin: 5px 0 6px; }
+  .node .does { font-size: 13px; color: var(--muted); }
+  .node.owner { border-color: var(--accent); border-width: 2px; }
+  .node.critic { background: var(--paper-2); }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    padding: 3px 8px; border-radius: 2px; letter-spacing: 0.03em;
+  }
+  .badge::before { content: "●"; font-size: 9px; }
+  .b-pass { color: var(--pass); background: var(--pass-bg); }
+  .b-block { color: var(--block); background: var(--block-bg); }
+  .b-wait { color: var(--wait); background: var(--wait-bg); }
+  .b-plain { color: var(--accent-2); background: var(--paper-2); }
+  .b-plain::before { content: none; }
+
+  /* Role cards */
+  .role-card {
+    border: 1px solid var(--line-strong);
+    background: var(--paper);
+    margin-bottom: 16px;
+  }
+  .role-card .top {
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--paper-2);
+  }
+  .role-card .rid { font-family: var(--mono); font-size: 12px; color: var(--accent); font-weight: 700; }
+  .role-card .rname { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .role-card .rplat { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-2); font-weight: 700; }
+  .role-card .rtag { margin-left: auto; }
+
+  .role-card .cols { display: grid; grid-template-columns: 1.15fr 1fr; gap: 0; }
+  .role-card .col { padding: 16px 18px; }
+  .role-card .col.left { border-right: 1px solid var(--line); }
+  .role-card h5 {
+    margin: 0 0 8px; font-family: var(--mono); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent-2);
+  }
+  .role-card h5.stop-h { color: var(--accent); }
+  .role-card ul { margin: 0 0 16px; padding-left: 18px; }
+  .role-card ul:last-child { margin-bottom: 0; }
+  .role-card li { font-size: 13.5px; margin: 5px 0; color: var(--ink); }
+  .role-card li b { font-family: var(--mono); font-size: 12.5px; font-weight: 700; }
+
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 13px; }
+  .kv dt { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 700; padding-top: 2px; }
+  .kv dd { margin: 0; color: var(--ink); }
+  .kv dd .mono { font-family: var(--mono); font-size: 12px; }
+  .kv .handoff { color: var(--accent-2); font-family: var(--mono); font-size: 12px; }
+
+  /* File map */
+  .map { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .map .box { border: 1px solid var(--line-strong); background: var(--paper); padding: 16px 18px; }
+  .map .box.keep { border-left: 3px solid var(--pass); }
+  .map .box.avoid { border-left: 3px solid var(--block); }
+  .map .box h3 { margin: 0 0 3px; font-size: 17px; }
+  .map .box .sub { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); margin-bottom: 12px; }
+  .map .box ul { margin: 0; padding-left: 0; list-style: none; }
+  .map .box li { padding: 6px 0; border-bottom: 1px dotted var(--line); font-size: 13.5px; }
+  .map .box li:last-child { border-bottom: 0; }
+  .map .box li .f { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--ink); }
+  .map .box li .d { color: var(--muted); }
+
+  .tree {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.7;
+    background: var(--paper-2); border: 1px solid var(--line);
+    padding: 16px 18px; white-space: pre; overflow-x: auto; color: var(--ink);
+    margin-top: 18px;
+  }
+  .tree .c { color: var(--accent); }
+  .tree .g { color: var(--faint); }
+
+  .callout {
+    border: 1px solid var(--line-strong);
+    border-left: 3px solid var(--accent-2);
+    background: var(--paper);
+    padding: 14px 18px; font-size: 14px; margin-top: 18px;
+  }
+  .callout b { font-variant: small-caps; letter-spacing: 0.03em; }
+
+  footer {
+    border-top: 2px solid var(--ink);
+    margin-top: 20px; padding: 22px 0 60px;
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  }
+
+  @media (max-width: 900px) {
+    .strip { grid-template-columns: repeat(2, 1fr); }
+    .pipe { grid-template-columns: repeat(2, 1fr); }
+    .role-card .cols { grid-template-columns: 1fr; }
+    .role-card .col.left { border-right: 0; border-bottom: 1px solid var(--line); }
+    .map { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    section { animation: rise .5s ease both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+<div class="kicker">ATTACKDRO · AI LAB ROLES · registry · 2026-07-10</div>
+<h1>Personal AI lab — the role registry</h1>
+<p class="standfirst">The stable map of the ATTACKDRO research lab: fixed identities, authority boundaries, inputs, outputs, handoffs, and operational files. This page is role governance—not experiment state and not a run contract.</p>
+<div class="central-claim"><b>Human authority.</b> <b>LAB-DIRECTOR</b> (Kiet) alone approves hypotheses, protocol changes, launches, scientific claims, submissions, pivots, and project termination.<span class="rule">Current state → docs/PROJECT_STATE.md · Agent prompts → prompts/ · Codex governance → AGENTS.md · Claude Code governance → CLAUDE.md</span></div>
+</div></header>
+<div class="wrap">
+<div class="strip">
+<div class="cell"><div class="big">3</div><div class="cap">AI platforms — ChatGPT, Claude, Codex</div></div>
+<div class="cell"><div class="big">7</div><div class="cap">Fixed AI roles with separate contracts</div></div>
+<div class="cell"><div class="big">1</div><div class="cap">Human authority — every scientific go/no-go</div></div>
+<div class="cell"><div class="big">1</div><div class="cap">Active planner — ATLAS-CHIEF only</div></div>
+</div>
+<section><div class="sec-head"><span class="sec-num">01</span><h2>The lab at a glance</h2><span class="note">authorize · plan · challenge · build · verify · execute</span></div>
+<p class="lead">The director owns decisions. Atlas keeps the project convergent and maps the literature. Claude reviews, falsifies, and implements. Codex verifies implementation and executes exactly one approved operation. Handoffs reduce duplication but never replace checking authoritative sources.</p>
+<div class="pipe">
+<div class="node owner"><div class="role">Human · authority</div><div class="who">LAB-DIRECTOR</div><div class="does">Locks hypotheses, gates, launches, claims, and submission decisions.</div></div>
+<div class="node"><div class="role">Platform · ChatGPT</div><div class="who">ATLAS</div><div class="does">Chief of Staff + Literature Analyst. Plans and positions; never launches.</div></div>
+<div class="node critic"><div class="role">Platform · Claude</div><div class="who">CLAUDE</div><div class="does">Critic + Adversary + Builder. Reviews, falsifies, and implements.</div></div>
+<div class="node"><div class="role">Platform · Codex</div><div class="who">CODEX</div><div class="does">Sentinel + Operator. Verifies and executes; never self-authorizes.</div></div>
+</div></section>
+<section><div class="sec-head"><span class="sec-num">02</span><h2>Atlas · ChatGPT</h2><span class="note">plan and position — never launch</span></div><div class="role-card"><div class="top"><span class="rid">A1</span><span class="rname">ATLAS-CHIEF</span><span class="rplat">ChatGPT · Research Chief of Staff</span><span class="rtag badge b-plain">sole active planner</span></div><div class="cols"><div class="col left"><h5>Main tasks</h5><ul><li>Maintains one active research question, experiment, and manuscript story.</li><li>Turns director decisions into atomic contracts and routes the correct specialist.</li><li>Separates observation, inference, uncertainty, and the next decision.</li></ul><h5 class="stop-h">Never does</h5><ul><li>Never self-authorizes protocol, launch, threshold, or claim.</li><li>Never modifies the repository or operates the GPU.</li><li>Never admits brainstormed work directly into the active queue.</li></ul></div><div class="col"><dl class="kv"><dt>Input</dt><dd>Director decisions, PROJECT_STATE, verified handoffs</dd><dt>Output</dt><dd>Decision memo, bounded contract, routing recommendation</dd><dt>Handoff</dt><dd>CLAUDE-CRITIC / CLAUDE-BUILDER / CODEX-OPERATOR after approval</dd><dt>W&B</dt><dd>Reads verified metrics only; never manages runs</dd><dt>Contract</dt><dd>prompts/atlas_chief.md</dd></dl></div></div></div><div class="role-card"><div class="top"><span class="rid">A2</span><span class="rname">ATLAS-LITERATURE</span><span class="rplat">ChatGPT · Literature Analyst</span><span class="rtag badge b-plain">evidence grounded</span></div><div class="cols"><div class="col left"><h5>Main tasks</h5><ul><li>Finds primary sources and accepted versions.</li><li>Builds mechanism, compute, evaluation, and novelty matrices.</li><li>Separates confirmed overlap from uncertain overlap requiring manual reading.</li></ul><h5 class="stop-h">Never does</h5><ul><li>Never invents citations, status, quotes, or numbers.</li><li>Never treats “not found” as proof of novelty.</li><li>Never adds a comparator or changes the plan.</li></ul></div><div class="col"><dl class="kv"><dt>Input</dt><dd>Research question, seed papers, scope</dd><dt>Output</dt><dd>Prior-work matrix, novelty risks, reading queue</dd><dt>Handoff</dt><dd>ATLAS-CHIEF / LAB-DIRECTOR</dd><dt>W&B</dt><dd>No operational access</dd><dt>Contract</dt><dd>prompts/atlas_literature.md</dd></dl></div></div></div></section><section><div class="sec-head"><span class="sec-num">03</span><h2>Claude</h2><span class="note">review, falsify, implement</span></div><div class="role-card"><div class="top"><span class="rid">C1</span><span class="rname">CLAUDE-CRITIC</span><span class="rplat">Claude · Scientific Reviewer</span><span class="rtag badge b-plain">gate reviewer</span></div><div class="cols"><div class="col left"><h5>Main tasks</h5><ul><li>Reviews discriminative design, fairness, leakage, attribution, and claim strength.</li><li>Required before consequential threshold locks, expensive multi-run batches, and manuscript claims.</li><li>Returns GREEN / YELLOW / RED with blockers separated from optional work.</li></ul><h5 class="stop-h">Never does</h5><ul><li>Never acts as the active planner.</li><li>Never implements or launches.</li><li>Never rescues a weak hypothesis with an untested post-hoc story.</li></ul></div><div class="col"><dl class="kv"><dt>Input</dt><dd>Design or claim packet, verified evidence</dd><dt>Output</dt><dd>Verdict, blocker, minimum fix, supported/unsupported claims</dd><dt>Handoff</dt><dd>ATLAS-CHIEF / LAB-DIRECTOR / CLAUDE-BUILDER</dd><dt>W&B</dt><dd>Read-only evidence</dd><dt>Contract</dt><dd>prompts/claude_critic.md</dd></dl></div></div></div><div class="role-card"><div class="top"><span class="rid">C2</span><span class="rname">CLAUDE-ADVERSARY</span><span class="rplat">Claude · Falsification Reviewer</span><span class="rtag badge b-plain">red team</span></div><div class="cols"><div class="col left"><h5>Main tasks</h5><ul><li>Ranks the strongest alternative explanations.</li><li>Designs the minimum discriminative falsification test.</li><li>Checks post-hoc narrative, leakage, budget mismatch, and causal overreach.</li></ul><h5 class="stop-h">Never does</h5><ul><li>Never optimizes the method to make it win.</li><li>Never changes protocol or queue.</li><li>Never executes or patches.</li></ul></div><div class="col"><dl class="kv"><dt>Input</dt><dd>Target claim, evidence packet, constraints</dd><dt>Output</dt><dd>Ranked alternatives, falsification test, outcome table</dd><dt>Handoff</dt><dd>CLAUDE-CRITIC / ATLAS-CHIEF / LAB-DIRECTOR</dd><dt>W&B</dt><dd>Read-only evidence</dd><dt>Contract</dt><dd>prompts/claude_adversary.md</dd></dl></div></div></div><div class="role-card"><div class="top"><span class="rid">C3</span><span class="rname">CLAUDE-BUILDER</span><span class="rplat">Claude Code · Implementation Engineer</span><span class="rtag badge b-plain">atomic implementation</span></div><div class="cols"><div class="col left"><h5>Main tasks</h5><ul><li>Implements exactly the approved contract.</li><li>Changes only allowed files and permitted support paths.</li><li>Reports diff, checks, limitations, and verification handoff.</li></ul><h5 class="stop-h">Never does</h5><ul><li>Never changes scientific design, protocol, or thresholds.</li><li>Never launches writer operations in the standard flow.</li><li>Never refactors opportunistically or hardcodes config-derived values.</li></ul></div><div class="col"><dl class="kv"><dt>Input</dt><dd>Atomic implementation contract</dd><dt>Output</dt><dd>Bounded diff, checker/smoke evidence, handoff</dd><dt>Handoff</dt><dd>CODEX-SENTINEL</dd><dt>W&B</dt><dd>May implement logging hooks; never manages runs</dd><dt>Contract</dt><dd>CLAUDE.md + prompts/claude_builder.md</dd></dl></div></div></div></section><section><div class="sec-head"><span class="sec-num">04</span><h2>Codex</h2><span class="note">verify and execute — never self-authorize</span></div><div class="role-card"><div class="top"><span class="rid">X1</span><span class="rname">CODEX-SENTINEL</span><span class="rplat">OpenAI Codex · Verification Engineer</span><span class="rtag badge b-plain">read-only gate</span></div><div class="cols"><div class="col left"><h5>Main tasks</h5><ul><li>Traces config and CLI to runtime behavior.</li><li>Verifies splits, attacks, loss, optimizer/scheduler semantics, metadata, and compute.</li><li>Returns GREEN / YELLOW / RED launch readiness.</li></ul><h5 class="stop-h">Never does</h5><ul><li>Never modifies files by default.</li><li>Never launches train/eval/audit/sync.</li><li>Never treats GREEN as authorization or metric gain as mechanism proof.</li></ul></div><div class="col"><dl class="kv"><dt>Input</dt><dd>Approved contract, repo state, expected changes</dd><dt>Output</dt><dd>Invariant table, verdict, minimum fixes</dd><dt>Handoff</dt><dd>LAB-DIRECTOR; RED → CLAUDE-BUILDER; GREEN → operator only after approval</dd><dt>W&B</dt><dd>Main-run silent fallback is a launch blocker</dd><dt>Contract</dt><dd>prompts/codex_sentinel_verify.md</dd></dl></div></div></div><div class="role-card"><div class="top"><span class="rid">X2</span><span class="rname">CODEX-OPERATOR</span><span class="rplat">OpenAI Codex · Experiment Operator</span><span class="rtag badge b-plain">launch gated</span></div><div class="cols"><div class="col left"><h5>Main tasks</h5><ul><li>Executes one exact approved operation.</li><li>Runs path, process, config, protocol, environment, and W&B gates.</li><li>Verifies artifacts, metadata, writer shutdown, and historical integrity.</li></ul><h5 class="stop-h">Never does</h5><ul><li>Never edits code/config or changes parameters.</li><li>Never launches a second operation or auto-recovers.</li><li>Never turns execution facts into broad claims.</li></ul></div><div class="col"><dl class="kv"><dt>Input</dt><dd>Exact approved operation + launch authorization</dd><dt>Output</dt><dd>Commands, exit codes, artifacts, bounded observation</dd><dt>Handoff</dt><dd>ATLAS-CHIEF / CLAUDE-CRITIC / LAB-DIRECTOR</dd><dt>W&B</dt><dd>MAIN_RUN online; approved diagnostics may be offline/disabled</dd><dt>Contract</dt><dd>prompts/codex_operator_execute.md</dd></dl></div></div></div></section><section><div class="sec-head"><span class="sec-num">05</span><h2>W&B and handoff rules</h2><span class="note">online main runs · no silent fallback</span></div>
+<div class="map"><div class="box keep"><h3>W&B policy</h3><div class="sub">operation-class specific</div><ul>
+<li><span class="f">MAIN_RUN</span> <span class="d">— online only; verify auth, project, entity, run name, and tags.</span></li>
+<li><span class="f">SMOKE / VALIDATION / DEBUG</span> <span class="d">— offline or disabled only when explicitly approved.</span></li>
+<li><span class="f">EVAL / AUDIT</span> <span class="d">— use the exact contracted mode.</span></li>
+<li><span class="f">W&B_SYNC</span> <span class="d">— always separately authorized.</span></li></ul></div>
+<div class="box avoid"><h3>Handoff is not authority</h3><div class="sub">summary helps; sources still win</div><ul>
+<li><span class="f">Routing advice</span> <span class="d">— never authorizes the next agent.</span></li>
+<li><span class="f">Human approval</span> <span class="d">— required before launch or protocol/claim changes.</span></li>
+<li><span class="f">Source verification</span> <span class="d">— handoff summaries never replace current files and artifacts.</span></li></ul></div></div></section>
+<section><div class="sec-head"><span class="sec-num">06</span><h2>Where each thing lives</h2><span class="note">stable registry · scoped contracts</span></div>
+<div class="tree"><span class="c">docs/</span>
+├── PROJECT_STATE.md      <span class="g"># current status and active gates (SSOT)</span>
+├── AI_LAB_ROLES.md       <span class="g"># stable role registry</span>
+├── AI_LAB_ROLES.html     <span class="g"># human-facing registry</span>
+└── dashboard.html        <span class="g"># generated status view</span>
+
+<span class="c">prompts/</span>
+├── atlas_chief.md
+├── atlas_literature.md
+├── claude_critic.md
+├── claude_adversary.md
+├── claude_builder.md
+├── codex_sentinel_verify.md
+└── codex_operator_execute.md
+
+AGENTS.md                 <span class="g"># repository / Codex governance</span>
+CLAUDE.md                 <span class="g"># Claude Code standing contract</span></div></section>
+</div><footer><div class="wrap" style="display:flex;justify-content:space-between;width:100%;flex-wrap:wrap;gap:10px;"><span>ATTACKDRO · AI lab role registry · stable boundaries, not run state</span><span>LAB-DIRECTOR authorizes · PROJECT_STATE governs status</span></div></footer></body></html>
