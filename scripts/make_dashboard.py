@@ -911,7 +911,7 @@ def main() -> None:
 <body>
   <header>
     <h1>AttackDRO Dashboard</h1>
-    <p>Regenerated from <code>docs/STATE.md</code> and result JSON files at $generated_at. &nbsp;·&nbsp; <a href="landscape.html" style="font-weight:600">→ Landscape (one-page overview)</a></p>
+    <p>Regenerated from <code>docs/STATE.md</code> and result JSON files at $generated_at. &nbsp;·&nbsp; <a href="archive/landscape.html" style="font-weight:600">→ Archived landscape overview</a></p>
   </header>
   <main>
     <div class="status">$status_cards</div>
