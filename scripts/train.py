@@ -6,6 +6,10 @@ Examples
     # Paper reactive run under the locked RAMP recipe
     python scripts/train.py --config configs/paper/reactive_ramprecipe.yaml
 
+    # After training, evaluate ckpt/val_best.pt and ckpt/last.pt on both
+    # val_select and test_monitor, logging back to the same W&B training run.
+    python scripts/post_train_develop_eval.py --config configs/paper/reactive_ramprecipe.yaml
+
     # 2-iteration smoke test on GPU (offline wandb, tiny eval)
     python scripts/train.py --config configs/paper/reactive_ramprecipe.yaml --smoke
 

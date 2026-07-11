@@ -1,7 +1,7 @@
 from .attacks_aa import NORM_MAP, craft_adv, robust_mask
-from .eval_union import evaluate_union, load_eval_checkpoint, load_test_subset
+from .eval_union import evaluate_union, load_eval_checkpoint, load_eval_split, load_test_subset
 
 __all__ = [
     "NORM_MAP", "craft_adv", "robust_mask",
-    "evaluate_union", "load_eval_checkpoint", "load_test_subset",
+    "evaluate_union", "load_eval_checkpoint", "load_eval_split", "load_test_subset",
 ]

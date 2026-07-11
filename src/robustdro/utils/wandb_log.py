@@ -40,6 +40,8 @@ except Exception:  # pragma: no cover - wandb optional
     _HAS_WANDB = False
 
 _PROJECT_DEFAULT = "attackdro-union"
+_FINAL_GROUP = "ramp80_t49k_v1k_final"
+_FINAL_TAGS = ["final", "test-final", "full-autoattack", "selected-winner"]
 
 
 def _wandb_id(run_name: str) -> str:
@@ -146,7 +148,9 @@ class WandbLogger:
 
 def log_eval_summary(cfg: dict, run_name: str, metrics: dict, *, version: str,
                      tier: str | None = None, n_examples: int | None = None,
-                     checkpoint: str | None = None, seed: int | None = None) -> bool:
+                     checkpoint: str | None = None, seed: int | None = None,
+                     split: str = "test_monitor", checkpoint_role: str | None = None,
+                     used_for_selection: bool = False, final: bool = False) -> bool:
     """Attach a harness eval_union result to W&B as SUMMARY metrics on the run
     named `run_name` (resumes the training run via its deterministic id, so
     training curves AND final eval live in one place). Returns True iff it logged.
@@ -170,39 +174,75 @@ def log_eval_summary(cfg: dict, run_name: str, metrics: dict, *, version: str,
         return False
     tier = tier or wcfg.get("tier")
     tags = _auto_tags(cfg, run_name) + [f"eval:{version}"]
+    if final:
+        tags = tags + _FINAL_TAGS
     per_norm = metrics.get("per_norm_robust_acc", {}) or {}
-    summary = {
-        # Canonical eval summary keys.
-        "eval/checkpoint": checkpoint,
-        "eval/clean_acc": metrics.get("clean_acc"),
-        "eval/worst_union": metrics.get("worst_union_acc"),
-        "eval/attack_linf_steps": (cfg.get("eval_attack", {}).get("linf", {}) or {}).get("steps"),
-        "eval/attack_l2_steps": (cfg.get("eval_attack", {}).get("l2", {}) or {}).get("steps"),
-        "eval/attack_l1_steps": (cfg.get("eval_attack", {}).get("l1", {}) or {}).get("steps"),
-        "eval/seed": seed,
-        # Backward-compatible aliases used by older views.
-        "eval/union": metrics.get("worst_union_acc"),
-        "eval/clean": metrics.get("clean_acc"),
-        "eval/avg": metrics.get("avg_robust_acc"),
-        "eval/version": version,
-        "eval/n": n_examples,
-        "eval/tier": tier,
-    }
-    for norm in ("linf", "l2", "l1"):
-        if norm in per_norm:
-            summary[f"eval/robust_{norm}"] = per_norm[norm]
-            summary[f"eval/{norm}"] = per_norm[norm]
+    eval_grade = "full_autoattack_standard" if final and version == "standard" else version
+    summary = {}
+    if final:
+        prefix = "final/test_final"
+        summary.update({
+            f"{prefix}/clean_acc": metrics.get("clean_acc"),
+            f"{prefix}/worst_union": metrics.get("worst_union_acc"),
+            f"{prefix}/n_examples": n_examples,
+            f"{prefix}/eval_grade": eval_grade,
+            f"{prefix}/used_for_selection": False,
+        })
+        for norm in ("linf", "l2", "l1"):
+            if norm in per_norm:
+                summary[f"{prefix}/robust_{norm}"] = per_norm[norm]
+    else:
+        summary.update({
+            # Canonical eval summary keys.
+            "eval/split": split,
+            "eval/checkpoint": checkpoint,
+            "eval/checkpoint_role": checkpoint_role,
+            "eval/clean_acc": metrics.get("clean_acc"),
+            "eval/worst_union": metrics.get("worst_union_acc"),
+            "eval/selected_by_test": False,
+            "eval/used_for_selection": bool(used_for_selection),
+            "eval/attack_linf_steps": (cfg.get("eval_attack", {}).get("linf", {}) or {}).get("steps"),
+            "eval/attack_l2_steps": (cfg.get("eval_attack", {}).get("l2", {}) or {}).get("steps"),
+            "eval/attack_l1_steps": (cfg.get("eval_attack", {}).get("l1", {}) or {}).get("steps"),
+            "eval/seed": seed,
+            # Backward-compatible aliases used by older views.
+            "eval/union": metrics.get("worst_union_acc"),
+            "eval/clean": metrics.get("clean_acc"),
+            "eval/avg": metrics.get("avg_robust_acc"),
+            "eval/version": version,
+            "eval/n": n_examples,
+            "eval/tier": tier,
+        })
+        for norm in ("linf", "l2", "l1"):
+            if norm in per_norm:
+                summary[f"eval/robust_{norm}"] = per_norm[norm]
+                summary[f"eval/{norm}"] = per_norm[norm]
+        if split and checkpoint_role:
+            prefix = f"eval/{split}/{checkpoint_role}"
+            summary.update({
+                f"{prefix}/clean_acc": metrics.get("clean_acc"),
+                f"{prefix}/worst_union": metrics.get("worst_union_acc"),
+                f"{prefix}/n_examples": n_examples,
+                f"{prefix}/used_for_selection": bool(used_for_selection),
+            })
+            for norm in ("linf", "l2", "l1"):
+                if norm in per_norm:
+                    summary[f"{prefix}/robust_{norm}"] = per_norm[norm]
     if "efficiency/attack_flops_ratio" in metrics:
         summary["efficiency/attack_flops_ratio"] = metrics["efficiency/attack_flops_ratio"]
     try:
+        group = _FINAL_GROUP if final else (wcfg.get("group") or None)
         run = wandb.init(project=wcfg.get("project", _PROJECT_DEFAULT),
                          entity=wcfg.get("entity") or None,
                          name=run_name, id=_wandb_id(run_name), resume="allow",
-                         tags=tags, mode=mode, config={"eval_only": True})
+                         group=group, tags=tags, mode=mode,
+                         config={"eval_only": True, "eval_split": split,
+                                 "checkpoint_role": checkpoint_role, "final": final})
         run.summary.update({k: v for k, v in summary.items() if v is not None})
         run.finish()
+        union_key = "final/test_final/worst_union" if final else "eval/worst_union"
         print(f"[wandb] eval summary logged to run={run_name} "
-              f"(union={summary['eval/worst_union']}, version={version}, tier={tier})")
+              f"(union={summary.get(union_key)}, version={version}, tier={tier}, split={split})")
         return True
     except Exception as e:  # pragma: no cover
         if required:

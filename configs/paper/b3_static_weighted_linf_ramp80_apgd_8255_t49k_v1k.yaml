@@ -1,0 +1,35 @@
+# B3 attribution baseline: deterministic static-weighted-linf allocation.
+# Inherits B2's locked RAMP80/APGD 10/10/10 train49k/val1k config and
+# changes only run identity, W&B tags, and the static source cycle.
+
+_base_: configs/paper/b2_static_cycle_ramp80_apgd_8255_t49k_v1k.yaml
+
+# run_paths() strips the trailing _s0 for local layout, yielding:
+# results/b3_static_weighted_linf_ramp80_apgd_8255_t49k_v1k/s0/
+run_name: b3_static_weighted_linf_ramp80_apgd_8255_t49k_v1k_s0
+
+wandb:
+  tags:
+    - cifar10
+    - prn18
+    - ramp80
+    - eps8255
+    - apgd-train-10-10-10
+    - eval-20-20-100
+    - t49k-v1k
+    - seed0
+    - screen
+    - family-static-allocation
+    - variant-static-weighted-linf
+    - b3
+    - attribution-baseline
+  tier: in-house
+
+train:
+  allocation_mode: static_cycle
+  static_cycle_order: [linf, linf, l2, l1]
+  static_extra_source: linf
+  static_extra_every_n_batches: 5
+  static_extra_mode: aggregate_loss
+  static_extra_primary_weight: 0.5
+  static_extra_source_weight: 0.5

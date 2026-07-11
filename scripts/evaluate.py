@@ -10,9 +10,14 @@ Examples
     # Quick eval on 1000 test images (APGD-CE + APGD-T), our PGD-AT checkpoint:
     python scripts/evaluate.py --checkpoint checkpoints/pgd_at_linf_best.pt -n 1000
 
-    # Final numbers: full AutoAttack on the whole test set:
+    # Develop eval on the selection split:
+    python scripts/evaluate.py --config configs/paper/base_ramp_apgd_8255.yaml \
+        --checkpoint results/run/s0/ckpt/val_best.pt --eval-split val_select \
+        --checkpoint-role val_best --version apgd -n 1000
+
+    # Final numbers: full AutoAttack on the whole test set, separate W&B final run:
     python scripts/evaluate.py --checkpoint checkpoints/pgd_at_linf_best.pt \
-        --version standard --n-examples 10000
+        --eval-split test_final --version standard --n-examples 10000
 
     # Just linf (e.g. sanity vs the in-training PGD probe):
     python scripts/evaluate.py --checkpoint ckpt.pt --norms linf
@@ -34,7 +39,7 @@ import torch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from robustdro.eval import evaluate_union, load_eval_checkpoint, load_test_subset  # noqa: E402
+from robustdro.eval import evaluate_union, load_eval_checkpoint, load_eval_split  # noqa: E402
 from robustdro.utils.io import apply_overrides, load_config, save_json            # noqa: E402
 from robustdro.utils.seed import set_seed                     # noqa: E402
 from robustdro.utils.wandb_log import log_eval_summary        # noqa: E402
@@ -42,6 +47,23 @@ from robustdro.utils.wandb_log import log_eval_summary        # noqa: E402
 
 def _checkpoint_label(path: str) -> str:
     return os.path.basename(path)
+
+
+def _checkpoint_role(path: str) -> str:
+    stem = os.path.splitext(os.path.basename(path))[0]
+    if stem in {"val_best", "last"}:
+        return stem
+    if stem == "best":
+        return "val_best"
+    if re.fullmatch(r"ep\d+", stem):
+        return stem
+    return stem or "checkpoint"
+
+
+def _final_run_name(run_name: str, seed: int) -> str:
+    if re.search(r"_s\d+$", run_name):
+        return f"{run_name}_final_fullAA"
+    return f"{run_name}_s{seed}_final_fullAA"
 
 
 def _maybe_load_efficiency(out: str) -> float | None:
@@ -64,13 +86,20 @@ def _maybe_load_efficiency(out: str) -> float | None:
 
 
 def _add_canonical_eval_keys(metrics: dict, cfg: dict, *, checkpoint: str, seed: int,
-                             efficiency: float | None = None) -> dict:
+                             split: str, checkpoint_role: str,
+                             used_for_selection: bool, final: bool,
+                             n_examples: int, efficiency: float | None = None) -> dict:
     per_norm = metrics.get("per_norm_robust_acc", {}) or {}
     eval_attack = cfg.get("eval_attack", {}) or {}
+    eval_grade = "full_autoattack_standard" if final and metrics.get("version") == "standard" else metrics.get("version")
     aliases = {
         "eval/checkpoint": _checkpoint_label(checkpoint),
+        "eval/checkpoint_role": checkpoint_role,
+        "eval/split": split,
         "eval/clean_acc": metrics.get("clean_acc"),
         "eval/worst_union": metrics.get("worst_union_acc"),
+        "eval/selected_by_test": False,
+        "eval/used_for_selection": bool(used_for_selection),
         "eval/attack_linf_steps": (eval_attack.get("linf", {}) or {}).get("steps"),
         "eval/attack_l2_steps": (eval_attack.get("l2", {}) or {}).get("steps"),
         "eval/attack_l1_steps": (eval_attack.get("l1", {}) or {}).get("steps"),
@@ -78,6 +107,27 @@ def _add_canonical_eval_keys(metrics: dict, cfg: dict, *, checkpoint: str, seed:
     }
     for norm in ("linf", "l2", "l1"):
         aliases[f"eval/robust_{norm}"] = per_norm.get(norm)
+    if split in {"val_select", "test_monitor"} and checkpoint_role:
+        prefix = f"eval/{split}/{checkpoint_role}"
+        aliases.update({
+            f"{prefix}/clean_acc": metrics.get("clean_acc"),
+            f"{prefix}/worst_union": metrics.get("worst_union_acc"),
+            f"{prefix}/n_examples": n_examples,
+            f"{prefix}/used_for_selection": bool(used_for_selection),
+        })
+        for norm in ("linf", "l2", "l1"):
+            aliases[f"{prefix}/robust_{norm}"] = per_norm.get(norm)
+    if final:
+        prefix = "final/test_final"
+        aliases.update({
+            f"{prefix}/clean_acc": metrics.get("clean_acc"),
+            f"{prefix}/worst_union": metrics.get("worst_union_acc"),
+            f"{prefix}/n_examples": n_examples,
+            f"{prefix}/eval_grade": eval_grade,
+            f"{prefix}/used_for_selection": False,
+        })
+        for norm in ("linf", "l2", "l1"):
+            aliases[f"{prefix}/robust_{norm}"] = per_norm.get(norm)
     if efficiency is not None:
         aliases["efficiency/attack_flops_ratio"] = efficiency
     out = dict(metrics)
@@ -85,7 +135,8 @@ def _add_canonical_eval_keys(metrics: dict, cfg: dict, *, checkpoint: str, seed:
     return out
 
 
-def _update_run_meta(out: str, cfg: dict, args, checkpoint_label: str) -> None:
+def _update_run_meta(out: str, cfg: dict, args, checkpoint_label: str,
+                     checkpoint_role: str, used_for_selection: bool) -> None:
     seed_dir = os.path.dirname(out)
     if not os.path.basename(seed_dir).startswith("s"):
         return
@@ -101,6 +152,10 @@ def _update_run_meta(out: str, cfg: dict, args, checkpoint_label: str) -> None:
     meta.update({
         "checkpoint_evaluated": checkpoint_label,
         "eval_checkpoint": checkpoint_label,
+        "eval_checkpoint_role": checkpoint_role,
+        "eval_split": args.eval_split,
+        "eval_used_for_selection": bool(used_for_selection),
+        "eval_selected_by_test": False,
         "eval_attack": {
             "version": args.version,
             "linf_steps": (eval_attack.get("linf", {}) or {}).get("steps"),
@@ -128,19 +183,30 @@ def parse_args():
                    default="robustdro", choices=["robustdro", "ramp"],
                    help="Checkpoint/model format. 'robustdro' preserves existing behavior; "
                         "'ramp' loads external/RAMP/model_zoo.fast_models.PreActResNet18.")
-    p.add_argument("-n", "--n-examples", type=int, default=1000,
-                   help="Number of test images (first n; deterministic). Use 10000 for full.")
+    p.add_argument("-n", "--n-examples", type=int, default=None,
+                   help="Number of images. Defaults: 1000 for val_select/test_monitor, "
+                        "10000/full test for test_final.")
     p.add_argument("--norms", nargs="+", default=["linf", "l2", "l1"],
                    choices=["linf", "l2", "l1"])
     p.add_argument("--version", default="apgd", choices=["apgd", "standard"],
                    help="apgd = APGD-CE+APGD-T (fast); standard = full AutoAttack (final).")
+    p.add_argument("--eval-split", choices=["val_select", "cal", "test_monitor", "test_final"],
+                   default="test_monitor",
+                   help="Eval role. val_select is held-out train selection split; "
+                        "cal is the held-out calibration split (test 9000-9999, pre-reg "
+                        "v3-A) — calibration/E_id only, never selection; test_monitor is "
+                        "fixed 1k test monitor; test_final is test 1000-8999 (8k).")
+    p.add_argument("--checkpoint-role", choices=["val_best", "last", "best", "external"], default=None,
+                   help="Role label for nested W&B keys. Defaults from checkpoint filename.")
     p.add_argument("--bs", type=int, default=250)
     p.add_argument("--device", default="cuda", choices=["cuda", "cpu"])
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--out", default=None, help="JSON output path (default results/eval_<ckpt>.json)")
+    p.add_argument("--out", default=None,
+                   help="JSON output path. Default per-run outputs are split-specific, "
+                        "e.g. eval_val_select_val_best.json; test_final uses eval_fullAA.json.")
     p.add_argument("--run-name", default=None,
-                   help="W&B run to attach eval summary to (default: checkpoint stem sans _best/_last). "
-                        "Our trainers use {method}_{variant}_s{seed}; pass it to land eval on the SAME run.")
+                   help="Training W&B run to attach develop evals to. test_final derives a separate "
+                        "<run>_s<seed>_final_fullAA run from this base name.")
     p.add_argument("--tier", default=None, choices=["in-house", "repro", "official"],
                    help="Comparison-lane tag for W&B (default: cfg wandb.tier; RAMP evals should pass 'repro').")
     p.add_argument("--no-wandb", action="store_true", help="Skip the W&B eval-summary log (JSON still written).")
@@ -165,6 +231,13 @@ def main():
             raise ValueError(f"--set expects KEY=VALUE, got {kv!r}")
         overrides[key.strip()] = yaml.safe_load(raw)
     cfg = apply_overrides(cfg, overrides)
+    if args.n_examples is None:
+        args.n_examples = 10000 if args.eval_split == "test_final" else 1000
+    checkpoint_role = args.checkpoint_role or _checkpoint_role(args.checkpoint)
+    if checkpoint_role == "best":
+        checkpoint_role = "val_best"
+    final_eval = args.eval_split == "test_final"
+    used_for_selection = args.eval_split == "val_select" and checkpoint_role == "val_best"
     device = args.device if torch.cuda.is_available() else "cpu"
 
     model, ckpt = load_eval_checkpoint(
@@ -172,9 +245,9 @@ def main():
     )
     epoch = ckpt.get("epoch", "?") if ckpt is not None else "external"
     print(f"[eval] model_family={args.model_family}  checkpoint={args.checkpoint} "
-          f"(epoch {epoch})  device={device}")
+          f"(epoch {epoch})  split={args.eval_split}  role={checkpoint_role}  device={device}")
 
-    x, y = load_test_subset(cfg, n_examples=args.n_examples)
+    x, y = load_eval_split(cfg, split=args.eval_split, n_examples=args.n_examples)
     metrics = evaluate_union(model, x, y, cfg, norms=tuple(args.norms),
                              version=args.version, device=device, bs=args.bs, seed=args.seed)
 
@@ -192,10 +265,13 @@ def main():
         # (screening APGD -> eval.json; full AutoAttack -> eval_fullAA.json). Explicit
         # --out still wins (e.g. flat RAMP-reference evals).
         from robustdro.utils.io import run_paths as _rp
-        _rn = args.run_name or re.sub(r"_(best|last|ep\d+)$", "",
+        _rn = args.run_name or re.sub(r"_(best|val_best|last|ep\d+)$", "",
                                       os.path.splitext(os.path.basename(args.checkpoint))[0])
         _p = _rp({"run_name": _rn, "seed": args.seed, "results_dir": "results/"})
-        out = _p["eval_fullAA"] if args.version == "standard" else _p["eval"]
+        if final_eval:
+            out = _p["eval_fullAA"]
+        else:
+            out = os.path.join(_p["seed_dir"], f"eval_{args.eval_split}_{checkpoint_role}.json")
     # Training protocol recorded FROM THE CHECKPOINT'S OWN cfg (if present), so
     # the views can auto-flag a train/eval eps MISMATCH (e.g. a 0.03-trained ckpt
     # evaluated at 8/255 is a lower bound, not a paper number). None for external
@@ -209,13 +285,19 @@ def main():
 
     efficiency = _maybe_load_efficiency(out)
     metrics = _add_canonical_eval_keys(
-        metrics, cfg, checkpoint=args.checkpoint, seed=args.seed, efficiency=efficiency
+        metrics, cfg, checkpoint=args.checkpoint, seed=args.seed, split=args.eval_split,
+        checkpoint_role=checkpoint_role, used_for_selection=used_for_selection,
+        final=final_eval, n_examples=args.n_examples, efficiency=efficiency
     )
     checkpoint_label = _checkpoint_label(args.checkpoint)
 
     save_json({
         "checkpoint": args.checkpoint,
         "checkpoint_evaluated": checkpoint_label,
+        "checkpoint_role": checkpoint_role,
+        "eval_split": args.eval_split,
+        "used_for_selection": bool(used_for_selection),
+        "selected_by_test": False,
         "model_family": args.model_family,
         "epoch": ckpt.get("epoch") if ckpt is not None else None,
         "n_examples": args.n_examples,
@@ -224,7 +306,7 @@ def main():
         "train_eval_eps_mismatch": mismatch,
         "metrics": metrics,
     }, out)
-    _update_run_meta(out, cfg, args, checkpoint_label)
+    _update_run_meta(out, cfg, args, checkpoint_label, checkpoint_role, used_for_selection)
     print(f"\n[eval] saved -> {out}")
     if mismatch:
         print(f"[eval] ⚠ train/eval eps MISMATCH: trained@{float(train_eps):g}, "
@@ -232,12 +314,15 @@ def main():
 
     # W&B view: attach union + per-norm to the run (JSON above is source of truth).
     if not args.no_wandb:
-        run_name = args.run_name or re.sub(r"_(best|last)$", "",
+        base_run_name = args.run_name or re.sub(r"_(best|val_best|last)$", "",
                                            os.path.splitext(os.path.basename(args.checkpoint))[0])
+        run_name = _final_run_name(base_run_name, args.seed) if final_eval else base_run_name
         tier = args.tier or ("repro" if args.model_family == "ramp" else None)
         log_eval_summary(cfg, run_name, metrics, version=args.version,
                          tier=tier, n_examples=args.n_examples,
-                         checkpoint=checkpoint_label, seed=args.seed)
+                         checkpoint=checkpoint_label, seed=args.seed,
+                         split=args.eval_split, checkpoint_role=checkpoint_role,
+                         used_for_selection=used_for_selection, final=final_eval)
 
 
 if __name__ == "__main__":

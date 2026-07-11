@@ -10,6 +10,7 @@ dataset:
   root: data/
   num_classes: 10
   num_workers: 4
+  val_holdout: 1000
 
 model:
   arch: preact_resnet18
@@ -47,6 +48,10 @@ train:
     - {norm: l1, steps: 10, step_size: 0.10, k: 20, gap: 0.05, random_k: true, random_start: false}
   eval_pgd_steps: 20
   eval_probe_batches: 8
+  val_select_n_examples: 1000
+  val_select_frequency: 1
+  test_monitor_n_examples: 1000
+  test_monitor_frequency: 10
   groupdro:
     eta_q: 0.02
     warmup_epochs: 0

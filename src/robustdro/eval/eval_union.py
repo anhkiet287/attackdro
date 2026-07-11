@@ -12,10 +12,9 @@ a strong attack in every norm (attacker picks the strongest per sample).
 from __future__ import annotations
 
 import torch
-import torchvision
-import torchvision.transforms as T
 
 from ..attacks.union import summarize
+from ..data import get_eval_split, get_test_subset
 from .attacks_aa import robust_mask
 
 
@@ -34,13 +33,12 @@ def load_test_subset(cfg, n_examples=None, device="cpu"):
     The subset is the first `n_examples` images — deterministic, so re-evals of
     different checkpoints see identical samples (fair comparison).
     """
-    ds = torchvision.datasets.CIFAR10(
-        root=cfg["dataset"]["root"], train=False, download=False, transform=T.ToTensor()
-    )
-    n = len(ds) if n_examples is None else min(n_examples, len(ds))
-    xs = torch.stack([ds[i][0] for i in range(n)])
-    ys = torch.tensor([ds[i][1] for i in range(n)])
-    return xs, ys
+    return get_test_subset(cfg, n_examples=n_examples, download=False)
+
+
+def load_eval_split(cfg, split="test_monitor", n_examples=None, device="cpu"):
+    """Load the canonical eval role: val_select, test_monitor, or test_final."""
+    return get_eval_split(cfg, split, n_examples=n_examples, download=False)
 
 
 def load_eval_checkpoint(checkpoint_path: str, cfg: dict, model_family: str = "robustdro",

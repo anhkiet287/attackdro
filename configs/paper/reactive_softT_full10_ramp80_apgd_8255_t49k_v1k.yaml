@@ -1,0 +1,30 @@
+# Active seed-0 reactive Full-10 baseline for the train49k/val1k screen.
+# Inherits the locked RAMP80/APGD 10/10/10 protocol and reactive Soft-T objective.
+
+_base_: configs/paper/reactive_ramprecipe.yaml
+
+# run_paths() strips the trailing _s0 for local layout, yielding:
+# results/reactive_softT_full10_ramp80_apgd_8255_t49k_v1k/s0/
+# W&B uses the full seeded name below.
+run_name: reactive_softT_full10_ramp80_apgd_8255_t49k_v1k_s0
+seed: 0
+results_dir: results/
+
+wandb:
+  mode: online
+  project: attackdro-union
+  entity: null
+  group: ramp80_t49k_v1k_seed0_screen
+  tags:
+    - cifar10
+    - prn18
+    - ramp80
+    - eps8255
+    - apgd-train-10-10-10
+    - eval-20-20-100
+    - t49k-v1k
+    - seed0
+    - screen
+    - family-reactive-softT
+    - variant-full10
+  tier: in-house

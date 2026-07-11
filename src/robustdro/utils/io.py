@@ -85,7 +85,7 @@ def load_json(path: str) -> Any:
 #       run_meta.json                   recipe / attack-steps / config-hash / git / eps
 #       s<seed>/
 #           smoke.json  train.json  eval.json  eval_fullAA.json
-#           ckpt/                       ep010.pt ... ep080.pt, best.pt, last.pt
+#           ckpt/                       ep010.pt ... ep080.pt, val_best.pt, last.pt
 # --------------------------------------------------------------------------- #
 import hashlib as _hashlib
 import re as _re
@@ -146,6 +146,14 @@ def write_run_meta(cfg: dict, paths: dict, extra: dict | None = None) -> None:
                    "save_freq": tr.get("save_freq")},
         "train_attack_steps": atk,
         "eps": {k: v.get("eps") for k, v in tm.items()},
+        "split_protocol": {
+            "train_core": 50000 - int((cfg.get("dataset", {}) or {}).get("val_holdout", 0)),
+            "val_select": int((cfg.get("dataset", {}) or {}).get("val_holdout", 0)),
+            "selection_metric": "val_select/worst_union",
+            "selection_checkpoint": "val_best.pt",
+            "test_monitor_n_examples": tr.get("test_monitor_n_examples"),
+            "test_monitor_frequency": tr.get("test_monitor_frequency"),
+        },
         "config_hash": config_hash(cfg),
         "git_commit": git_commit(),
         **(extra or {}),
