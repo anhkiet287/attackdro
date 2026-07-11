@@ -338,7 +338,7 @@ def time_ramp8b(rows: list[Row]) -> None:
 
 
 def time_trait_state(rows: list[Row]) -> None:
-    cmd = [sys.executable, "scripts/dev/binding_trait_vs_state_v2.py",
+    cmd = [sys.executable, "scripts/legacy/binding_trait_vs_state_v2.py",
            "--out", "results/reports/trait_state_v2.md"]
     dt, result = timed(lambda: subprocess.run(cmd, cwd=REPO, text=True,
                                              stdout=subprocess.PIPE,
