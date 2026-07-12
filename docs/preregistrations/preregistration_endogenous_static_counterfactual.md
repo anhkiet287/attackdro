@@ -38,6 +38,8 @@ No norm is labeled "true", "correct", or "misleading" in run names, arm labels, 
 ## 5. Confirmatory predictions + statistics (critic v2 §4,5,6,7,8)
 Machinery = the locked paired sample-level bootstrap on canonical union-survival masks (test_final 8k, B=10,000, seed 0, one-sided 95%), seed-s0 conditional. **B4's comparison checkpoint = val_best.pt (frozen before the statics run).**
 
+**Canonical evaluation radii (clarification — critic-authorized):** every `U(·)` in RE-P0/P1/P2 is the canonical union at the **standard CIFAR-10 triple (ℓ∞ 8/255, L2 0.5, L1 12)**; the L1 eps=16 used in training is a **training stressor** (to shift the training bottleneck), NOT an evaluation radius. RE-P0/P1/P2 therefore concern **U(8/255, 0.5, 12)**.
+
 **The mechanism claim is CONJUNCTIVE and requires ALL of RE-P0 ∧ RE-P1 ∧ RE-P2** (each one-sided 95%, seed-s0 conditional; individual components not promoted beyond the registered family without caution).
 - **RE-P0 (direct static-vs-static — the actual "L1-weighting is worse" test):** `LCB(U_{static-L∞-weighted} − U_{static-L1-weighted}) > 0`. This establishes the L∞-weighted static beats the L1-weighted static on union. **Required** — RE-P1/RE-P2 alone do not test this (both can pass while the statics are indistinguishable).
 - **RE-P1 (B4 vs L1-weighted):** `LCB(U_B4 − U_{static-L1-weighted}) > 0`. Limit: *B4 outperforms the L1-weighted static under the locked regime* — NOT "because it discovered the bottleneck".
@@ -68,6 +70,8 @@ The G2 packet must include: **director disposition of the prior unauthorized cal
 
 ## 9. Top-venue framing (critic §10)
 This is a **controlled CIFAR-10 eps-16 case study / mechanism evidence**, NOT a stand-alone general "robust to bottleneck misidentification" claim. A top-tier central claim additionally needs a natural dataset-level bottleneck change (the separate ImageNet/cross-dataset program) and/or a fresh seed/regime registered before results.
+
+**Claim boundary (clarification — critic-authorized):** the counterfactual is established on the **standard-triple union U(8/255, 0.5, 12)** under an **eps-16 training stressor**; it makes no claim about robustness at an L1=16 evaluation radius.
 
 ## 10. Execution after G4 Pass + director gate
 1. Run **B3-static-L∞-weighted** + **B3-static-L1-weighted** (2×80ep, s0, eps16; existing configs).
