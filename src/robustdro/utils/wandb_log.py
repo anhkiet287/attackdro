@@ -65,9 +65,12 @@ def _auto_tags(cfg: dict, run_name: str | None) -> list[str]:
     tier = wcfg.get("tier")
     if tier:
         tags.append(f"tier:{tier}")
+    # W&B rejects tags longer than 64 chars (a hard Settings-validation limit);
+    # truncate so a long run_name can't fail online init (the full run_name is
+    # still preserved verbatim as the W&B run name/id). Mirrors _wandb_id()[:64].
     seen, out = set(), []
     for t in tags:
-        t = str(t)
+        t = str(t)[:64]
         if t not in seen:
             seen.add(t)
             out.append(t)
