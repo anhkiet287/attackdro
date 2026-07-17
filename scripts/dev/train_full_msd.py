@@ -65,6 +65,7 @@ from c5_fromscratch import (  # noqa: E402  -- the M1a term, imported verbatim
 )
 from robustdro.attacks.apgd_train import apgd_train  # noqa: E402
 from robustdro.attacks.norms import msd_v0  # noqa: E402
+from robustdro.utils.wandb_log import WandbLogger  # noqa: E402
 
 MAINI_LINF = 0.03          # what upstream trains at; recorded for provenance only
 TRAIN_EPS = PROXY_EPS      # {"Linf": 8/255, "L2": 0.5, "L1": 12.0} -- imported, cannot drift
@@ -93,6 +94,7 @@ def main():
     p.add_argument("--tau", type=float, default=0.1)
     p.add_argument("--warmup", type=int, default=10)
     p.add_argument("--num-workers", type=int, default=int(os.environ.get("C5_NUM_WORKERS", 2)))
+    p.add_argument("--wandb-mode", choices=["online", "offline", "disabled"], default="online")
     p.add_argument("--smoke", action="store_true", help="1 epoch, few batches; verifies wiring only")
     a = p.parse_args()
 
@@ -101,6 +103,25 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     out = Path(a.outdir)
     out.mkdir(parents=True, exist_ok=True)
+
+    # ---- W&B: deterministic run id + resume="allow" (inside WandbLogger) means a
+    # Colab disconnect RESUMES the same run instead of spawning a new one, so the
+    # curve stays continuous across re-attaches.
+    run_name = f"C5_M1a_full_seed{a.seed}"
+    wcfg = {
+        "method": "clamp_pullpush_full", "seed": a.seed, "run_name": run_name,
+        "wandb": {"project": "attackdro-union", "entity": None, "mode": a.wandb_mode,
+                  "tags": ["cifar10", "prn18", "C5", "fromscratch", "pullpush",
+                           "M1a_full", "full-scale", f"msd{a.msd_steps}"]},
+        "arm": "M1a_full", "epochs": a.epochs, "bs": a.bs, "lr_peak": a.lr_peak,
+        "wd": a.wd, "momentum": a.momentum, "msd_steps": a.msd_steps, "n_iter": a.n_iter,
+        "alpha": a.alpha, "beta": a.beta, "tau": a.tau, "warmup": a.warmup,
+        "train_eps": TRAIN_EPS, "val_proxy_eps": PROXY_EPS,
+        "upstream_linf_not_used": MAINI_LINF,
+        "recipe": "robust_union CIFAR10/train.py (50ep, np.interp one-cycle peak 0.1); "
+                  "Linf radius 0.03 -> 8/255 for cross-arm comparability",
+    }
+    wb = WandbLogger(wcfg, run_name=run_name)
 
     model = BackboneHead().to(device)
     opt = torch.optim.SGD(model.parameters(), lr=a.lr_peak, momentum=a.momentum,
@@ -172,6 +193,9 @@ def main():
                      "sec": round(time.time() - t0)})
         print(f"[M1a-full] ep{ep + 1}/{a.epochs} loss={rl / n:.3f} ce={rc / n:.3f} "
               f"lr={lr:.4f} valWU={wu:.4f} ({hist[-1]['sec']}s)", flush=True)
+        # NOTE: no history replay on resume -- resume="allow" continues the same
+        # W&B run, so earlier epochs are already on the curve.
+        wb.log({f"train/{k}": v for k, v in hist[-1].items() if k != "epoch"}, step=ep)
 
         # ---- Drive-direct persistence, every epoch --------------------------
         if wu > best:
@@ -192,8 +216,11 @@ def main():
 
         if a.smoke:
             print("[M1a-full] SMOKE OK -- wiring verified, stopping after 1 epoch", flush=True)
+            wb.finish()
             return
 
+    wb.summary({"best_val_worst_union": best, "epochs_completed": a.epochs})
+    wb.finish()
     print(f"[M1a-full] DONE best_valWU={best:.4f} -> {out}", flush=True)
 
 
