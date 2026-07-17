@@ -9,20 +9,18 @@ BASE (locuslab/robust_union CIFAR10/train.py + cifar_funcs.py, verbatim values):
   epochs 50 | batch 128 | SGD lr peak 0.1, momentum 0.9, weight_decay 5e-4
   lr(t) = np.interp(t, [0, 20, 40, 50], [0, 0.1, 0.005, 0])     # their one-cycle
   MSD training attack: msd_v0, num_iter 50, alphas (0.003, 0.05, 0.05)
-  TRAIN threat triple (theirs): Linf 0.03, L2 0.5, L1 12
 
 TERM (identical to M1a): 3 APGD views (10 steps each), alpha=beta=0.5, tau=0.1,
   warm-up 0->10 epochs, SimCLR head 512->512->128 (discarded at eval).
 
-THREE DIFFERENT EPS TRIPLES ARE IN PLAY -- deliberately:
-  * TRAIN  = Maini triple (Linf 0.03): faithful to the recipe being replicated.
-  * VAL-SELECT proxy = the standard triple (Linf 8/255) via the imported
-    `worst_union_acc`, so val_best is chosen the same way as every other arm and the
-    arms stay comparable.
-  * AUDIT = the standard triple (Linf 8/255), frozen harness. Training at 0.03 and
-    auditing at 8/255 is slightly *harder* than training, i.e. conservative.
-  `--view-eps {maini,standard}` controls only the APGD views (default: maini, so the
-  positives live in the same threat model as the base attack).
+ONE THREAT TRIPLE EVERYWHERE: Linf 8/255, L2 0.5, L1 12.
+  This is a DELIBERATE deviation from the upstream recipe, which trains at Linf 0.03.
+  Everything else in the base is theirs; only the radius changes. Training, val-select
+  and the audit therefore all use the same triple, which means:
+    * M1a-full is directly comparable to M1a / M0, which also trained at 8/255;
+    * there is no train/audit threat-model gap to caveat.
+  The triple is imported from the M1a trainer (`EPS`) rather than restated, so it cannot
+  drift from the other arms. `MAINI_LINF` below is kept only to document what upstream used.
 
 RESUME SAFETY (Colab can drop at any moment; never lose more than one epoch):
   * `ckpt_latest.pt` is written to OUTDIR after EVERY epoch (model + optimizer +
@@ -68,7 +66,8 @@ from c5_fromscratch import (  # noqa: E402  -- the M1a term, imported verbatim
 from robustdro.attacks.apgd_train import apgd_train  # noqa: E402
 from robustdro.attacks.norms import msd_v0  # noqa: E402
 
-MAINI_EPS = {"Linf": 0.03, "L2": 0.5, "L1": 12.0}   # their train.py / cifar_funcs.py
+MAINI_LINF = 0.03          # what upstream trains at; recorded for provenance only
+TRAIN_EPS = PROXY_EPS      # {"Linf": 8/255, "L2": 0.5, "L1": 12.0} -- imported, cannot drift
 NORMS = ["Linf", "L2", "L1"]
 
 
@@ -93,7 +92,6 @@ def main():
     p.add_argument("--beta", type=float, default=0.5)
     p.add_argument("--tau", type=float, default=0.1)
     p.add_argument("--warmup", type=int, default=10)
-    p.add_argument("--view-eps", choices=["maini", "standard"], default="maini")
     p.add_argument("--num-workers", type=int, default=int(os.environ.get("C5_NUM_WORKERS", 2)))
     p.add_argument("--smoke", action="store_true", help="1 epoch, few batches; verifies wiring only")
     a = p.parse_args()
@@ -103,7 +101,6 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     out = Path(a.outdir)
     out.mkdir(parents=True, exist_ok=True)
-    view_eps = MAINI_EPS if a.view_eps == "maini" else PROXY_EPS
 
     model = BackboneHead().to(device)
     opt = torch.optim.SGD(model.parameters(), lr=a.lr_peak, momentum=a.momentum,
@@ -132,9 +129,9 @@ def main():
     X, Y = load_eval_tensors()
     val_idx = list(range(*VAL_SELECT))
 
-    print(f"[M1a-full] base=MSD steps={a.msd_steps} train_eps={MAINI_EPS} "
-          f"| views=APGD n_iter={a.n_iter} eps={view_eps} "
-          f"| val-proxy eps={PROXY_EPS} (standard, for cross-arm comparability)", flush=True)
+    print(f"[M1a-full] base=MSD steps={a.msd_steps} | views=APGD n_iter={a.n_iter} "
+          f"| ONE triple everywhere (train == val-select == audit): {TRAIN_EPS} "
+          f"| upstream trains Linf {MAINI_LINF} -- deliberately not used", flush=True)
 
     for ep in range(start_ep, a.epochs):
         model.train()
@@ -148,11 +145,11 @@ def main():
         for bi, (x, y) in enumerate(loader):
             x, y = x.to(device), y.to(device)
             # base: MSD adversarial drives the CE term
-            x_msd = msd_v0(model, x, y, MAINI_EPS["Linf"], MAINI_EPS["L2"], MAINI_EPS["L1"],
+            x_msd = msd_v0(model, x, y, TRAIN_EPS["Linf"], TRAIN_EPS["L2"], TRAIN_EPS["L1"],
                            steps=a.msd_steps)
             lce = ce_at_loss(model, [x_msd], y)
             # term: 3 APGD views feed the pull-push positives (identical to M1a)
-            xs_adv = [apgd_train(model, x, y, nm, view_eps[nm], n_iter=a.n_iter, is_train=False)
+            xs_adv = [apgd_train(model, x, y, nm, TRAIN_EPS[nm], n_iter=a.n_iter, is_train=False)
                       for nm in NORMS]
             lpp, comp = decoupled_pullpush(model, x, xs_adv, y, w * a.alpha, w * a.beta,
                                            a.tau, "adv")
@@ -183,10 +180,10 @@ def main():
                     "best": best, "hist": hist}, out / "ckpt_latest.pt")
         (out / "train.json").write_text(json.dumps({
             "arm": "M1a_full", "seed": a.seed, "epochs": a.epochs,
-            "base": "msd_v0", "msd_steps": a.msd_steps, "train_eps": MAINI_EPS,
-            "view_eps": view_eps, "n_iter": a.n_iter, "alpha": a.alpha, "beta": a.beta,
+            "base": "msd_v0", "msd_steps": a.msd_steps, "train_eps": TRAIN_EPS,
+            "view_eps": TRAIN_EPS, "upstream_linf_not_used": MAINI_LINF, "n_iter": a.n_iter, "alpha": a.alpha, "beta": a.beta,
             "tau": a.tau, "warmup": a.warmup, "lr_peak": a.lr_peak, "wd": a.wd,
-            "bs": a.bs, "recipe": "locuslab/robust_union CIFAR10/train.py (50ep, np.interp lr)",
+            "bs": a.bs, "recipe": "locuslab/robust_union CIFAR10/train.py (50ep, np.interp lr); Linf radius changed 0.03 -> 8/255 for cross-arm comparability",
             "val_proxy_eps": PROXY_EPS, "best_val_worst_union": best,
             "epochs_completed": ep + 1, "history": hist,
         }, indent=2))
