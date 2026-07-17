@@ -160,7 +160,9 @@ def main():
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
-            rl += float(loss); rc += float(lce); rg += comp["glue"]; rs += comp["scaffold"]; n += 1
+            # .item() rather than float(): the tensors still require grad, and float() on
+            # them raises a UserWarning. Values are logging-only either way.
+            rl += loss.item(); rc += lce.item(); rg += comp["glue"]; rs += comp["scaffold"]; n += 1
             if a.smoke and bi >= 2:
                 break
 
