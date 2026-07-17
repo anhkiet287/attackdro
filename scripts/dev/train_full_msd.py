@@ -23,14 +23,25 @@ ONE THREAT TRIPLE EVERYWHERE: Linf 8/255, L2 0.5, L1 12.
   drift from the other arms. `MAINI_LINF` below is kept only to document what upstream used.
 
 RESUME SAFETY (Colab can drop at any moment; never lose more than one epoch):
-  * `ckpt_latest.pt` is written to OUTDIR after EVERY epoch (model + optimizer +
-    epoch counter + best + history).
+  * After EVERY epoch: `ckpt_latest.pt` = model + optimizer (incl. momentum buffers) +
+    epoch counter + best + history + RNG state.
+  * Writes are ATOMIC (temp file + rename). A ~90 MB save onto Drive is not atomic, so a
+    runtime death mid-write would otherwise leave a truncated checkpoint and cost the
+    whole run rather than one epoch.
+  * The last good checkpoint is rotated to `ckpt_prev.pt` before the new one is written,
+    and resume tries latest -> prev. So a death anywhere in the write window still leaves
+    one loadable checkpoint: worst case is one lost epoch, which is the stated budget.
+  * RNG (torch/cuda/numpy/python) is saved and restored, so attack randomness continues
+    on the same stream. The per-epoch data order is seeded as f(seed, epoch), so a resumed
+    epoch sees exactly the shuffle an uninterrupted run would have seen.
   * The lr schedule is a pure function of the epoch, so there is no scheduler state to
     restore -- resuming just recomputes lr(epoch). This is why their np.interp schedule
     is used directly instead of torch's OneCycleLR.
-  * `train.json` is rewritten with the full history after every epoch, so it doubles as
-    a progress record and (at epoch 49, 0-indexed) the done-sentinel.
+  * `train.json` is rewritten (atomically) with the full history after every epoch, so it
+    doubles as a progress record and (at epochs_completed == 50) the done-sentinel.
   * Re-running with the same --outdir resumes silently. No prompts.
+  Verified by scratchpad/test_resume.py: clean kill, truncated latest, missing latest
+  (mid-rotation), RNG continuity, deterministic epoch shuffle -- 9/9.
 
 Usage:
   ATTACKDRO_ROOT=/content/attackdro python scripts/dev/train_full_msd.py \
@@ -41,12 +52,69 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import sys
 import time
 from pathlib import Path
 
 import numpy as np
 import torch
+
+
+def _atomic_save(obj, path: Path) -> None:
+    """Save via temp file + rename.
+
+    A ~90 MB torch.save straight onto Drive is NOT atomic: if the runtime dies part-way
+    through, the checkpoint is left truncated and resume fails -- losing the whole run
+    rather than one epoch. Writing to .tmp and renaming means the visible file is only
+    ever a complete one (rename is atomic within a filesystem).
+    """
+    tmp = path.with_name(path.name + ".tmp")
+    torch.save(obj, tmp)
+    os.replace(tmp, path)
+
+
+def _atomic_write_text(text: str, path: Path) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+
+
+def _load_resume(cands, device):
+    """First readable checkpoint wins. `ckpt_prev.pt` is the fallback for the case where
+    the runtime died during the rename window, so a corrupt latest costs one epoch, not all."""
+    for p in cands:
+        if not p.exists():
+            continue
+        try:
+            return torch.load(p, map_location=device, weights_only=False), p
+        except Exception as e:
+            print(f"[M1a-full] {p.name} is unreadable ({type(e).__name__}: {e}); "
+                  f"falling back to the previous checkpoint", flush=True)
+    return None, None
+
+
+def _rng_state(device):
+    return {"torch": torch.get_rng_state(),
+            "cuda": torch.cuda.get_rng_state_all() if device == "cuda" else None,
+            "numpy": np.random.get_state(),
+            "python": random.getstate()}
+
+
+def _restore_rng(st, device):
+    """Attack randomness (MSD's k ~ U{5..20}, APGD init) draws from the global RNGs, so
+    restoring them keeps a resumed run on the same stream as an uninterrupted one."""
+    if not st:
+        return False
+    torch.set_rng_state(st["torch"].cpu() if hasattr(st["torch"], "cpu") else st["torch"])
+    if device == "cuda" and st.get("cuda") is not None:
+        try:
+            torch.cuda.set_rng_state_all(st["cuda"])
+        except Exception as e:
+            print(f"[M1a-full] could not restore CUDA RNG ({e}); continuing", flush=True)
+    np.random.set_state(st["numpy"])
+    random.setstate(st["python"])
+    return True
 
 ROOT = Path(os.environ.get("ATTACKDRO_ROOT", "/mnt/c/Users/ADMIN/Documents/Claude/Projects/ATTACKDRO"))
 sys.path.insert(0, str(ROOT / "scripts" / "dev"))
@@ -129,18 +197,20 @@ def main():
 
     # ---- resume: ckpt_latest is the single source of truth -------------------
     start_ep, best, hist = 0, -1.0, []
-    latest = out / "ckpt_latest.pt"
-    if latest.exists():
-        st = torch.load(latest, map_location=device, weights_only=False)
+    latest, prev = out / "ckpt_latest.pt", out / "ckpt_prev.pt"
+    st, src = _load_resume([latest, prev], device)
+    if st is not None:
         model.load_state_dict(st["model"])
         opt.load_state_dict(st["opt"])
         start_ep = int(st["epoch"]) + 1
         best = float(st["best"])
         hist = st["hist"]
-        print(f"[M1a-full] RESUMED from epoch {st['epoch']} "
-              f"(best_valWU={best:.4f}) -> starting at epoch {start_ep}", flush=True)
+        rng_ok = _restore_rng(st.get("rng"), device)
+        print(f"[M1a-full] RESUMED from {src.name} @ epoch {st['epoch']} "
+              f"(best_valWU={best:.4f}) -> starting at epoch {start_ep} "
+              f"| RNG {'restored' if rng_ok else 'NOT in ckpt (older format)'}", flush=True)
     else:
-        print("[M1a-full] fresh start (no ckpt_latest.pt in outdir)", flush=True)
+        print("[M1a-full] fresh start (no readable checkpoint in outdir)", flush=True)
 
     if start_ep >= a.epochs:
         print(f"[M1a-full] already complete ({start_ep}/{a.epochs}). Nothing to do.", flush=True)
@@ -157,6 +227,10 @@ def main():
     for ep in range(start_ep, a.epochs):
         model.train()
         t0 = time.time()
+        # Data order = f(seed, epoch), NOT a continuation of a stream. This is what makes a
+        # resumed epoch see exactly the shuffle an uninterrupted run would have seen.
+        if getattr(loader, "generator", None) is not None:
+            loader.generator.manual_seed(a.seed * 10_000 + ep)
         lr = lr_at(ep + 1, a.epochs, a.lr_peak)
         for g in opt.param_groups:
             g["lr"] = lr
@@ -200,11 +274,15 @@ def main():
         # ---- Drive-direct persistence, every epoch --------------------------
         if wu > best:
             best = wu
-            torch.save({"cfg": MODEL_CFG, "model": model.b.state_dict()}, out / "val_best.pt")
-            torch.save({"epoch": ep, "val_worst_union": wu}, out / "val_best_meta.pt")
-        torch.save({"epoch": ep, "model": model.state_dict(), "opt": opt.state_dict(),
-                    "best": best, "hist": hist}, out / "ckpt_latest.pt")
-        (out / "train.json").write_text(json.dumps({
+            _atomic_save({"cfg": MODEL_CFG, "model": model.b.state_dict()}, out / "val_best.pt")
+            _atomic_save({"epoch": ep, "val_worst_union": wu}, out / "val_best_meta.pt")
+        # Rotate the last good checkpoint aside before writing the new one, so a death
+        # anywhere in this window still leaves one loadable checkpoint on Drive.
+        if latest.exists():
+            os.replace(latest, prev)
+        _atomic_save({"epoch": ep, "model": model.state_dict(), "opt": opt.state_dict(),
+                      "best": best, "hist": hist, "rng": _rng_state(device)}, latest)
+        _atomic_write_text(json.dumps({
             "arm": "M1a_full", "seed": a.seed, "epochs": a.epochs,
             "base": "msd_v0", "msd_steps": a.msd_steps, "train_eps": TRAIN_EPS,
             "view_eps": TRAIN_EPS, "upstream_linf_not_used": MAINI_LINF, "n_iter": a.n_iter, "alpha": a.alpha, "beta": a.beta,
@@ -212,7 +290,7 @@ def main():
             "bs": a.bs, "recipe": "locuslab/robust_union CIFAR10/train.py (50ep, np.interp lr); Linf radius changed 0.03 -> 8/255 for cross-arm comparability",
             "val_proxy_eps": PROXY_EPS, "best_val_worst_union": best,
             "epochs_completed": ep + 1, "history": hist,
-        }, indent=2))
+        }, indent=2), out / "train.json")
 
         if a.smoke:
             print("[M1a-full] SMOKE OK -- wiring verified, stopping after 1 epoch", flush=True)
