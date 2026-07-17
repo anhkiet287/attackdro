@@ -149,6 +149,9 @@ def lr_at(t: float, epochs: int, peak: float) -> float:
 def main():
     p = argparse.ArgumentParser(description="M1a-FULL: Maini MSD base + M1a pull-push term.")
     p.add_argument("--outdir", required=True, help="Drive-direct output directory")
+    p.add_argument("--variant", choices=["M1a", "M0"], default="M1a",
+                   help="M1a = MSD base + pull-push term; M0 = matched control, pure MSD-AT "
+                        "(no head, no APGD views, no term -- the honest full-budget denominator)")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--epochs", type=int, default=50)          # Maini
     p.add_argument("--bs", type=int, default=128)             # Maini
@@ -175,13 +178,14 @@ def main():
     # ---- W&B: deterministic run id + resume="allow" (inside WandbLogger) means a
     # Colab disconnect RESUMES the same run instead of spawning a new one, so the
     # curve stays continuous across re-attaches.
-    run_name = f"C5_M1a_full_seed{a.seed}"
+    run_name = f"C5_{a.variant}_full_seed{a.seed}"
     wcfg = {
-        "method": "clamp_pullpush_full", "seed": a.seed, "run_name": run_name,
+        "method": ("clamp_pullpush_full" if a.variant != "M0" else "msd_at_full"),
+        "variant": a.variant, "seed": a.seed, "run_name": run_name,
         "wandb": {"project": "attackdro-union", "entity": None, "mode": a.wandb_mode,
                   "tags": ["cifar10", "prn18", "C5", "fromscratch", "pullpush",
-                           "M1a_full", "full-scale", f"msd{a.msd_steps}"]},
-        "arm": "M1a_full", "epochs": a.epochs, "bs": a.bs, "lr_peak": a.lr_peak,
+                           f"{a.variant}_full", "full-scale", f"msd{a.msd_steps}"]},
+        "arm": f"{a.variant}_full", "epochs": a.epochs, "bs": a.bs, "lr_peak": a.lr_peak,
         "wd": a.wd, "momentum": a.momentum, "msd_steps": a.msd_steps, "n_iter": a.n_iter,
         "alpha": a.alpha, "beta": a.beta, "tau": a.tau, "warmup": a.warmup,
         "train_eps": TRAIN_EPS, "val_proxy_eps": PROXY_EPS,
@@ -206,21 +210,23 @@ def main():
         best = float(st["best"])
         hist = st["hist"]
         rng_ok = _restore_rng(st.get("rng"), device)
-        print(f"[M1a-full] RESUMED from {src.name} @ epoch {st['epoch']} "
+        print(f"[{a.variant}-full] RESUMED from {src.name} @ epoch {st['epoch']} "
               f"(best_valWU={best:.4f}) -> starting at epoch {start_ep} "
               f"| RNG {'restored' if rng_ok else 'NOT in ckpt (older format)'}", flush=True)
     else:
-        print("[M1a-full] fresh start (no readable checkpoint in outdir)", flush=True)
+        print(f"[{a.variant}-full] fresh start (no readable checkpoint in outdir)", flush=True)
 
     if start_ep >= a.epochs:
-        print(f"[M1a-full] already complete ({start_ep}/{a.epochs}). Nothing to do.", flush=True)
+        print(f"[{a.variant}-full] already complete ({start_ep}/{a.epochs}). Nothing to do.", flush=True)
         return
 
     loader = make_aug_loader(a.bs, a.seed, a.num_workers)
     X, Y = load_eval_tensors()
     val_idx = list(range(*VAL_SELECT))
 
-    print(f"[M1a-full] base=MSD steps={a.msd_steps} | views=APGD n_iter={a.n_iter} "
+    pullpush = a.variant != "M0"     # M0 = pure MSD-AT (no head/views/term); the matched control
+    print(f"[{a.variant}-full] variant={a.variant} pull-push={pullpush} | base=MSD steps={a.msd_steps} "
+          f"| views=APGD n_iter={a.n_iter if pullpush else '(none)'} "
           f"| ONE triple everywhere (train == val-select == audit): {TRAIN_EPS} "
           f"| upstream trains Linf {MAINI_LINF} -- deliberately not used", flush=True)
 
@@ -243,11 +249,15 @@ def main():
             x_msd = msd_v0(model, x, y, TRAIN_EPS["Linf"], TRAIN_EPS["L2"], TRAIN_EPS["L1"],
                            steps=a.msd_steps)
             lce = ce_at_loss(model, [x_msd], y)
-            # term: 3 APGD views feed the pull-push positives (identical to M1a)
-            xs_adv = [apgd_train(model, x, y, nm, TRAIN_EPS[nm], n_iter=a.n_iter, is_train=False)
-                      for nm in NORMS]
-            lpp, comp = decoupled_pullpush(model, x, xs_adv, y, w * a.alpha, w * a.beta,
-                                           a.tau, "adv")
+            if pullpush:
+                # term: 3 APGD views feed the pull-push positives (identical to M1a)
+                xs_adv = [apgd_train(model, x, y, nm, TRAIN_EPS[nm], n_iter=a.n_iter, is_train=False)
+                          for nm in NORMS]
+                lpp, comp = decoupled_pullpush(model, x, xs_adv, y, w * a.alpha, w * a.beta,
+                                               a.tau, "adv")
+            else:
+                # M0: no head, no views, no term -- CE on the MSD adversarial only.
+                lpp, comp = lce.new_zeros(()), {"glue": 0.0, "scaffold": 0.0}
             loss = lce + lpp
             if not torch.isfinite(loss):
                 raise RuntimeError(f"non-finite loss at epoch {ep} batch {bi}: "
@@ -265,7 +275,7 @@ def main():
         hist.append({"epoch": ep, "loss": rl / n, "ce": rc / n, "glue": rg / n,
                      "scaffold": rs / n, "val_worst_union": wu, "lr": lr,
                      "sec": round(time.time() - t0)})
-        print(f"[M1a-full] ep{ep + 1}/{a.epochs} loss={rl / n:.3f} ce={rc / n:.3f} "
+        print(f"[{a.variant}-full] ep{ep + 1}/{a.epochs} loss={rl / n:.3f} ce={rc / n:.3f} "
               f"lr={lr:.4f} valWU={wu:.4f} ({hist[-1]['sec']}s)", flush=True)
         # NOTE: no history replay on resume -- resume="allow" continues the same
         # W&B run, so earlier epochs are already on the curve.
@@ -283,7 +293,7 @@ def main():
         _atomic_save({"epoch": ep, "model": model.state_dict(), "opt": opt.state_dict(),
                       "best": best, "hist": hist, "rng": _rng_state(device)}, latest)
         _atomic_write_text(json.dumps({
-            "arm": "M1a_full", "seed": a.seed, "epochs": a.epochs,
+            "arm": f"{a.variant}_full", "variant": a.variant, "seed": a.seed, "epochs": a.epochs,
             "base": "msd_v0", "msd_steps": a.msd_steps, "train_eps": TRAIN_EPS,
             "view_eps": TRAIN_EPS, "upstream_linf_not_used": MAINI_LINF, "n_iter": a.n_iter, "alpha": a.alpha, "beta": a.beta,
             "tau": a.tau, "warmup": a.warmup, "lr_peak": a.lr_peak, "wd": a.wd,
@@ -293,13 +303,13 @@ def main():
         }, indent=2), out / "train.json")
 
         if a.smoke:
-            print("[M1a-full] SMOKE OK -- wiring verified, stopping after 1 epoch", flush=True)
+            print(f"[{a.variant}-full] SMOKE OK -- wiring verified, stopping after 1 epoch", flush=True)
             wb.finish()
             return
 
     wb.summary({"best_val_worst_union": best, "epochs_completed": a.epochs})
     wb.finish()
-    print(f"[M1a-full] DONE best_valWU={best:.4f} -> {out}", flush=True)
+    print(f"[{a.variant}-full] DONE best_valWU={best:.4f} -> {out}", flush=True)
 
 
 if __name__ == "__main__":
