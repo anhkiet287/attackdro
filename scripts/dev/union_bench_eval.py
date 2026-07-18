@@ -62,20 +62,27 @@ class _Normalize(torch.nn.Module):
 
 
 _RB_NORMALIZE = False   # set from --normalize; used by build_robustbench
+_RB_NAME = None         # set from --rb-name; when given, ckpt is a fine-tuned state_dict to load INTO that arch
 
 
 def build_robustbench(ckpt_path, device):
-    """RobustBench CIFAR-10 model. ckpt_path is the cached file; the model NAME is its stem.
-    Fixes for our stack: torch 2.11 defaults weights_only=True (RB v0.2.1/1.1 predate it) ->
-    patch to False around load_model (trusted source). --normalize wraps CIFAR mean/std for
-    models that expect normalized input (settled empirically by the B2 reproduce-check)."""
+    """RobustBench CIFAR-10 model, two modes:
+      * reproduce (no --rb-name): ckpt_path is the cached published file; model NAME is its stem.
+      * fine-tuned (--rb-name <name>): build that published arch, then load OUR fine-tuned
+        state_dict from ckpt_path over it (so a fine-tuned RB arm audits through the same path).
+    torch 2.11 defaults weights_only=True (RB predates it) -> patch to False (trusted source).
+    --normalize wraps CIFAR mean/std (settled by the B2 reproduce-check; Sehwag_R18 is [0,1])."""
     import torch as _t
-    name = Path(ckpt_path).stem
     _orig = _t.load
     _t.load = lambda *ar, **kw: _orig(*ar, **{**kw, "weights_only": False})
     try:
         from robustbench.utils import load_model
+        name = _RB_NAME or Path(ckpt_path).stem
         m = load_model(model_name=name, dataset="cifar10", threat_model="Linf")
+        if _RB_NAME is not None:                 # override published weights with our fine-tuned ones
+            sd = _t.load(ckpt_path, map_location=device)
+            if isinstance(sd, dict) and "state_dict" in sd: sd = sd["state_dict"]
+            m.load_state_dict(sd, strict=True)
     finally:
         _t.load = _orig
     if _RB_NORMALIZE:
@@ -97,10 +104,15 @@ def main():
     p.add_argument("--export-masks", action="store_true")
     p.add_argument("--normalize", action="store_true",
                    help="prepend CIFAR mean/std (for robustbench models that expect normalized input)")
+    p.add_argument("--rb-name", default=None,
+                   help="robustbench arch to reconstruct when --checkpoint is a FINE-TUNED state_dict")
+    p.add_argument("--skip-square", action="store_true",
+                   help="drop the Square (black-box) components — fast tier for a quick Δ read")
     a = p.parse_args()
 
-    global _RB_NORMALIZE
+    global _RB_NORMALIZE, _RB_NAME
     _RB_NORMALIZE = a.normalize
+    _RB_NAME = a.rb_name
     import torch
     device = "cuda" if (a.device == "cuda" and torch.cuda.is_available()) else "cpu"
     cfg = H.load_audit_config(a.config); H.validate_config(cfg)
@@ -115,6 +127,8 @@ def main():
     per_attack, masks = {}, {}
     for attack in H.iter_attacks(cfg):
         name = attack["name"]
+        if a.skip_square and "square" in name:      # fast tier: no black-box
+            continue
         mask, qm, qx = H.run_attack_mask(model, x, y, attack, float(cfg["eps"][attack["eps_key"]]), device, a.bs)
         masks[name] = mask
         per_attack[name] = {"robust_acc": H.mean_mask(mask), "n": int(mask.numel()), "available": True,

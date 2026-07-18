@@ -47,9 +47,69 @@ from robustdro.attacks.norms import msd_v0  # noqa: E402
 TRAIN_CORE = (0, 49000)
 
 
+import torch.nn as nn  # noqa: E402
+import torch.nn.functional as F  # noqa: E402
+
+
+class RBBackboneHead(nn.Module):
+    """RobustBench encoder + SimCLR head (discarded at eval). Penultimate features are read via
+    a forward hook on the classifier's input, so it works for ANY RobustBench CIFAR model that
+    ends in a Linear (ResNet-18, WRN, ...). Head dim inferred from the classifier's in_features."""
+    def __init__(self, rb_model, hid=512, proj=128):
+        super().__init__()
+        self.b = rb_model
+        self._clf = [m for m in rb_model.modules() if isinstance(m, nn.Linear)][-1]
+        feat = self._clf.in_features
+        self._feat = {}
+        self._clf.register_forward_hook(lambda mod, inp, out: self._feat.__setitem__("f", inp[0]))
+        self.head = nn.Sequential(nn.Linear(feat, hid), nn.ReLU(inplace=True), nn.Linear(hid, proj))
+        self.feat_dim = feat
+
+    def logits(self, x):
+        return self.b(x)
+
+    def features(self, x):
+        self.b(x)                       # hook captures the classifier's input (penultimate)
+        return self._feat["f"]
+
+    def embed(self, x):
+        return F.normalize(self.head(self.features(x)), dim=1)
+
+    def forward(self, x):
+        return self.b(x)
+
+
+def load_rb_backbone(name, device):
+    """Load a RobustBench CIFAR-10 Linf model by name. Handles torch 2.x weights_only + the
+    gdrive download (RobustBench's util does the fetch; gdown must be a version that clicks the
+    virus-scan token). Input convention is [0,1] (verified by the B2 reproduce-check)."""
+    import torch as _t
+    _orig = _t.load
+    _t.load = lambda *ar, **kw: _orig(*ar, **{**kw, "weights_only": False})
+    try:
+        from robustbench.utils import load_model
+        m = load_model(model_name=name, dataset="cifar10", threat_model="Linf",
+                       model_dir=str(ROOT / "models"))
+    finally:
+        _t.load = _orig
+    return m.to(device)
+
+
+def build_model(base, device):
+    """base = 'msd' (robust_union MSD.pt) | 'robustbench:<name>'. Same CLAMP head + interface
+    either way, so the fine-tune loop and the term are identical across bases (fairness)."""
+    if base == "msd":
+        return MSDBackboneHead(load_msd_backbone(device)).to(device)
+    if base.startswith("robustbench:"):
+        return RBBackboneHead(load_rb_backbone(base.split(":", 1)[1], device)).to(device)
+    raise ValueError(f"unknown --base {base!r} (use 'msd' or 'robustbench:<model_name>')")
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--arm", choices=["clamp", "none"], required=True)
+    p.add_argument("--base", default="msd",
+                   help="'msd' (robust_union MSD.pt) or 'robustbench:<model_name>'")
     p.add_argument("--outdir", required=True)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--epochs", type=int, default=8)          # ~1 h/arm
@@ -69,7 +129,7 @@ def main():
     out = Path(a.outdir); (out / "ckpt").mkdir(parents=True, exist_ok=True)
     clamp = a.arm == "clamp"
 
-    model = MSDBackboneHead(load_msd_backbone(device)).to(device)
+    model = build_model(a.base, device)
     opt = torch.optim.SGD(model.parameters(), lr=a.lr, momentum=0.9, weight_decay=5e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=a.epochs)
 
@@ -83,8 +143,8 @@ def main():
     X, Y = load_train_tensors(device)
     val_idx = list(range(*VAL_SELECT))
 
-    print(f"[ft-{a.arm}] MSD.pt base + {'CLAMP term' if clamp else 'no term (matched control)'} "
-          f"| epochs={a.epochs} lr={a.lr} | val-select standard-triple worst-union", flush=True)
+    print(f"[ft-{a.arm}] base={a.base} + {'CLAMP term' if clamp else 'no term (matched control)'} "
+          f"| feat_dim={getattr(model,'feat_dim',512)} epochs={a.epochs} lr={a.lr} | val-select standard-triple", flush=True)
 
     best, hist = -1.0, []
     for ep in range(a.epochs):
@@ -116,7 +176,7 @@ def main():
             torch.save(model.b.state_dict(), out / "ckpt" / "val_best.pt")   # robust_union arch, plain sd
     torch.save(model.b.state_dict(), out / "ckpt" / "last.pt")
     (out / "train.json").write_text(json.dumps({
-        "arm": a.arm, "clamp": clamp, "base": "MSD.pt", "seed": a.seed, "epochs": a.epochs,
+        "arm": a.arm, "clamp": clamp, "base": a.base, "seed": a.seed, "epochs": a.epochs,
         "lr": a.lr, "msd_steps": a.msd_steps, "alpha": a.alpha, "beta": a.beta, "tau": a.tau,
         "best_val_worst_union": best, "epochs_completed": a.epochs, "history": hist,
         "val_best_sha256": hashlib.sha256((out / "ckpt" / "val_best.pt").read_bytes()).hexdigest(),
