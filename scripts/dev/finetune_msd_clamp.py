@@ -112,15 +112,15 @@ def main():
                    help="'msd' (robust_union MSD.pt) or 'robustbench:<model_name>'")
     p.add_argument("--outdir", required=True)
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--epochs", type=int, default=8)          # ~1 h/arm
+    p.add_argument("--epochs", type=int, default=15)         # LOCKED: wide budget, val-select picks best
     p.add_argument("--bs", type=int, default=128)
-    p.add_argument("--lr", type=float, default=0.01)         # small: base is already converged
+    p.add_argument("--lr", type=float, default=0.005)        # LOCKED: gentle -> stays a fine-tune, not a retrain
     p.add_argument("--msd-steps", type=int, default=10)
     p.add_argument("--n-iter", type=int, default=10)
     p.add_argument("--alpha", type=float, default=0.5)
     p.add_argument("--beta", type=float, default=0.5)
     p.add_argument("--tau", type=float, default=0.1)
-    p.add_argument("--warmup", type=int, default=3)
+    p.add_argument("--warmup", type=int, default=2)          # LOCKED: term full-strength sooner (head needs >=2 ep)
     p.add_argument("--num-workers", type=int, default=int(os.environ.get("C5_NUM_WORKERS", 4)))
     a = p.parse_args()
 
@@ -130,6 +130,13 @@ def main():
     clamp = a.arm == "clamp"
 
     model = build_model(a.base, device)
+    # FULL fine-tune: encoder is NOT frozen (CLAMP must be able to reshape features; freezing
+    # would neuter the term). Every parameter is trainable and goes to the optimizer.
+    for p_ in model.parameters():
+        p_.requires_grad_(True)
+    n_enc = sum(p_.numel() for p_ in model.b.parameters())
+    n_head = sum(p_.numel() for p_ in model.head.parameters())
+    print(f"[ft-{a.arm}] FULL fine-tune: encoder {n_enc/1e6:.2f}M (trainable) + head {n_head/1e3:.0f}K", flush=True)
     opt = torch.optim.SGD(model.parameters(), lr=a.lr, momentum=0.9, weight_decay=5e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=a.epochs)
 
