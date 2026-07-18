@@ -60,3 +60,6 @@ external/
 # leaked ramp virtualenv (never commit)
 .venv-ramp/
 .venv*/
+
+# RobustBench downloaded model cache (explore #3)
+models/
