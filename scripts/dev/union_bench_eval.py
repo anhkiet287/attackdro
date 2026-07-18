@@ -20,6 +20,7 @@ ROOT = Path(os.environ["ATTACKDRO_ROOT"]) if os.environ.get("ATTACKDRO_ROOT") \
     else Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "src"))
+import torch
 import eval_multinorm_audit as H
 from robustdro.utils.io import save_json
 
@@ -50,7 +51,41 @@ def build_eat_softplus(ckpt_path, device):
     return m
 
 
-BUILDERS = {"robust_union_preact": build_robust_union, "eat_fast_softplus": build_eat_softplus}
+class _Normalize(torch.nn.Module):
+    """CIFAR-10 mean/std normalization prepended to a model that expects normalized input."""
+    def __init__(self, mean=(0.4914, 0.4822, 0.4465), std=(0.2471, 0.2435, 0.2616)):
+        super().__init__()
+        self.register_buffer("m", torch.tensor(mean).view(1, 3, 1, 1))
+        self.register_buffer("s", torch.tensor(std).view(1, 3, 1, 1))
+    def forward(self, x):
+        return (x - self.m) / self.s
+
+
+_RB_NORMALIZE = False   # set from --normalize; used by build_robustbench
+
+
+def build_robustbench(ckpt_path, device):
+    """RobustBench CIFAR-10 model. ckpt_path is the cached file; the model NAME is its stem.
+    Fixes for our stack: torch 2.11 defaults weights_only=True (RB v0.2.1/1.1 predate it) ->
+    patch to False around load_model (trusted source). --normalize wraps CIFAR mean/std for
+    models that expect normalized input (settled empirically by the B2 reproduce-check)."""
+    import torch as _t
+    name = Path(ckpt_path).stem
+    _orig = _t.load
+    _t.load = lambda *ar, **kw: _orig(*ar, **{**kw, "weights_only": False})
+    try:
+        from robustbench.utils import load_model
+        m = load_model(model_name=name, dataset="cifar10", threat_model="Linf")
+    finally:
+        _t.load = _orig
+    if _RB_NORMALIZE:
+        m = torch.nn.Sequential(_Normalize(), m)
+    m.to(device).eval()
+    return m
+
+
+BUILDERS = {"robust_union_preact": build_robust_union, "eat_fast_softplus": build_eat_softplus,
+            "robustbench": build_robustbench}
 
 
 def main():
@@ -60,8 +95,12 @@ def main():
     p.add_argument("--out", required=True); p.add_argument("--arch", required=True, choices=list(BUILDERS))
     p.add_argument("--bs", type=int, default=128); p.add_argument("--device", default="cuda")
     p.add_argument("--export-masks", action="store_true")
+    p.add_argument("--normalize", action="store_true",
+                   help="prepend CIFAR mean/std (for robustbench models that expect normalized input)")
     a = p.parse_args()
 
+    global _RB_NORMALIZE
+    _RB_NORMALIZE = a.normalize
     import torch
     device = "cuda" if (a.device == "cuda" and torch.cuda.is_available()) else "cpu"
     cfg = H.load_audit_config(a.config); H.validate_config(cfg)
