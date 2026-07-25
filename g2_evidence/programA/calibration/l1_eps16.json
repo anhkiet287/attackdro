@@ -1,0 +1,83 @@
+{
+  "checkpoint": "results/b3_static_weighted_linf_ramp80_apgd_8255_t49k_v1k/s0/ckpt/val_best.pt",
+  "checkpoint_evaluated": "val_best.pt",
+  "checkpoint_role": "val_best",
+  "epoch": 72,
+  "eval_split": "cal",
+  "metrics": {
+    "avg_robust_acc": 0.49266667167345685,
+    "clean_acc": 0.8450000286102295,
+    "eval/attack_l1_steps": 100,
+    "eval/attack_l2_steps": 20,
+    "eval/attack_linf_steps": 20,
+    "eval/checkpoint": "val_best.pt",
+    "eval/checkpoint_role": "val_best",
+    "eval/clean_acc": 0.8450000286102295,
+    "eval/robust_l1": 0.3659999966621399,
+    "eval/robust_l2": 0.6890000104904175,
+    "eval/robust_linf": 0.4230000078678131,
+    "eval/seed": 0,
+    "eval/selected_by_test": false,
+    "eval/split": "cal",
+    "eval/used_for_selection": false,
+    "eval/worst_union": 0.34299999475479126,
+    "n": 1000,
+    "norms": [
+      "linf",
+      "l2",
+      "l1"
+    ],
+    "per_norm_robust_acc": {
+      "l1": 0.3659999966621399,
+      "l2": 0.6890000104904175,
+      "linf": 0.4230000078678131
+    },
+    "version": "apgd",
+    "worst_union_acc": 0.34299999475479126
+  },
+  "model_family": "robustdro",
+  "n_examples": 1000,
+  "protocol": {
+    "eval_attack": {
+      "l1": {
+        "restarts": 1,
+        "steps": 100
+      },
+      "l2": {
+        "restarts": 1,
+        "steps": 20
+      },
+      "linf": {
+        "restarts": 1,
+        "steps": 20
+      }
+    },
+    "threat_model": {
+      "l1": {
+        "eps": 16
+      },
+      "l2": {
+        "eps": 0.5
+      },
+      "linf": {
+        "eps": 0.03137254901960784
+      }
+    }
+  },
+  "selected_by_test": false,
+  "train_eval_eps_mismatch": false,
+  "train_protocol": {
+    "threat_model": {
+      "l1": {
+        "eps": 12.0
+      },
+      "l2": {
+        "eps": 0.5
+      },
+      "linf": {
+        "eps": 0.03137254901960784
+      }
+    }
+  },
+  "used_for_selection": false
+}

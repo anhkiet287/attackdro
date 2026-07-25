@@ -1,5 +1,7 @@
 # AttackDRO
 
+> **Official method name: CLAMP (CLean-Anchored Multi-norm Pull–push); internal code retains historical pull-push naming.**
+
 AttackDRO studies compute-efficient predictive versus static allocation for multi-norm adversarial training on CIFAR-10 with PreActResNet-18 and ℓ∞/ℓ2/ℓ1 threats.
 
 Start here:

@@ -107,16 +107,26 @@ def sha256_file(path: str | Path) -> str:
 
 def git_commit() -> str:
     try:
-        return subprocess.run(
+        sha = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
             cwd=ROOT,
             check=False,
             capture_output=True,
             text=True,
             timeout=5,
-        ).stdout.strip() or "unknown"
+        ).stdout.strip()
+        if sha:
+            return sha
     except Exception:
-        return "unknown"
+        pass
+    # Colab/zip fallback: no .git in the extracted tree -> read the sha baked into the zip at build time
+    try:
+        f = ROOT / ".git_commit"
+        if f.exists():
+            return f.read_text(encoding="utf-8").strip() or "unknown"
+    except Exception:
+        pass
+    return "unknown"
 
 
 def utc_now() -> str:
@@ -141,8 +151,8 @@ def validate_config(cfg: dict[str, Any]) -> None:
     errors: list[str] = []
     if cfg.get("name") != SCHEMA_VERSION:
         errors.append(f"name must be {SCHEMA_VERSION!r}")
-    if cfg.get("dataset") != "cifar10":
-        errors.append("dataset must be 'cifar10'")
+    if cfg.get("dataset") not in ("cifar10", "cifar100"):
+        errors.append("dataset must be 'cifar10' or 'cifar100'")
     if cfg.get("split") != "test":
         errors.append("split must be 'test'")
     if (cfg.get("model", {}) or {}).get("arch") != "preact_resnet18":
@@ -258,7 +268,10 @@ def load_subset(cfg: dict[str, Any]):
     indices_path = repo_path(subset_cfg["indices_path"])
     assert_write_path_safe(indices_path)
 
-    ds = torchvision.datasets.CIFAR10(
+    # dataset from config (default cifar10 → byte-identical to the frozen behaviour); cifar100 for
+    # the C100 matched-pair audit. Subset generation below (incl class_balanced) is dataset-agnostic.
+    _DSETS = {"cifar10": torchvision.datasets.CIFAR10, "cifar100": torchvision.datasets.CIFAR100}
+    ds = _DSETS[cfg.get("dataset", "cifar10")](
         root=str(ROOT / "data"),
         train=False,
         download=False,

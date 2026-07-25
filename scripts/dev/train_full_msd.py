@@ -160,6 +160,13 @@ def main():
     p.add_argument("--momentum", type=float, default=0.9)     # Maini
     p.add_argument("--msd-steps", type=int, default=50)       # Maini num_iter
     p.add_argument("--n-iter", type=int, default=10)          # APGD views (== M1a)
+    p.add_argument("--apgd-view-steps", type=int, default=None,
+                   help="steps for the 3 APGD glue views ONLY (default = --n-iter = 10); "
+                        "does NOT touch the base msd_steps. Staleness test: set 50 to matched-strength views.")
+    p.add_argument("--arm", default=None,
+                   help="alias for --variant: 'M1a_full'/'M0_full' (or 'M1a'/'M0'); overrides --variant if given")
+    p.add_argument("--resume", default="auto",
+                   help="no-op: resume is ALWAYS automatic from ckpt_latest.pt in --outdir (idempotent)")
     p.add_argument("--alpha", type=float, default=0.5)
     p.add_argument("--beta", type=float, default=0.5)
     p.add_argument("--tau", type=float, default=0.1)
@@ -168,6 +175,13 @@ def main():
     p.add_argument("--wandb-mode", choices=["online", "offline", "disabled"], default="online")
     p.add_argument("--smoke", action="store_true", help="1 epoch, few batches; verifies wiring only")
     a = p.parse_args()
+    if a.arm:                                    # --arm M1a_full -> variant M1a (cell-compat)
+        a.variant = a.arm.replace("_full", "")
+    if a.variant not in ("M1a", "M0"):
+        p.error(f"--variant/--arm must resolve to 'M1a' or 'M0', got {a.variant!r}")
+    # view steps: explicit --apgd-view-steps wins, else falls back to --n-iter (=10) -> byte-identical
+    # to every prior run (which never passed --apgd-view-steps). Base msd_steps is untouched.
+    view_steps = a.apgd_view_steps if a.apgd_view_steps is not None else a.n_iter
 
     torch.manual_seed(a.seed)
     np.random.seed(a.seed)
@@ -178,13 +192,17 @@ def main():
     # ---- W&B: deterministic run id + resume="allow" (inside WandbLogger) means a
     # Colab disconnect RESUMES the same run instead of spawning a new one, so the
     # curve stays continuous across re-attaches.
-    run_name = f"C5_{a.variant}_full_seed{a.seed}"
+    # staleness-test runs (views != canonical 10-step) get a distinct W&B run id so they do NOT
+    # resume/collide with the canonical M1a_full/M0_full seed runs. views==10 -> unchanged name.
+    vtag = "" if view_steps == 10 else f"_v{view_steps}"
+    run_name = f"C5_{a.variant}_full_seed{a.seed}{vtag}"
     wcfg = {
         "method": ("clamp_pullpush_full" if a.variant != "M0" else "msd_at_full"),
         "variant": a.variant, "seed": a.seed, "run_name": run_name,
         "wandb": {"project": "attackdro-union", "entity": None, "mode": a.wandb_mode,
                   "tags": ["cifar10", "prn18", "C5", "fromscratch", "pullpush",
-                           f"{a.variant}_full", "full-scale", f"msd{a.msd_steps}"]},
+                           f"{a.variant}_full", "full-scale", f"msd{a.msd_steps}",
+                           f"views{view_steps}"]},
         "arm": f"{a.variant}_full", "epochs": a.epochs, "bs": a.bs, "lr_peak": a.lr_peak,
         "wd": a.wd, "momentum": a.momentum, "msd_steps": a.msd_steps, "n_iter": a.n_iter,
         "alpha": a.alpha, "beta": a.beta, "tau": a.tau, "warmup": a.warmup,
@@ -226,7 +244,7 @@ def main():
 
     pullpush = a.variant != "M0"     # M0 = pure MSD-AT (no head/views/term); the matched control
     print(f"[{a.variant}-full] variant={a.variant} pull-push={pullpush} | base=MSD steps={a.msd_steps} "
-          f"| views=APGD n_iter={a.n_iter if pullpush else '(none)'} "
+          f"| views=APGD steps={view_steps if pullpush else '(none)'} "
           f"| ONE triple everywhere (train == val-select == audit): {TRAIN_EPS} "
           f"| upstream trains Linf {MAINI_LINF} -- deliberately not used", flush=True)
 
@@ -251,7 +269,7 @@ def main():
             lce = ce_at_loss(model, [x_msd], y)
             if pullpush:
                 # term: 3 APGD views feed the pull-push positives (identical to M1a)
-                xs_adv = [apgd_train(model, x, y, nm, TRAIN_EPS[nm], n_iter=a.n_iter, is_train=False)
+                xs_adv = [apgd_train(model, x, y, nm, TRAIN_EPS[nm], n_iter=view_steps, is_train=False)
                           for nm in NORMS]
                 lpp, comp = decoupled_pullpush(model, x, xs_adv, y, w * a.alpha, w * a.beta,
                                                a.tau, "adv")
@@ -295,7 +313,8 @@ def main():
         _atomic_write_text(json.dumps({
             "arm": f"{a.variant}_full", "variant": a.variant, "seed": a.seed, "epochs": a.epochs,
             "base": "msd_v0", "msd_steps": a.msd_steps, "train_eps": TRAIN_EPS,
-            "view_eps": TRAIN_EPS, "upstream_linf_not_used": MAINI_LINF, "n_iter": a.n_iter, "alpha": a.alpha, "beta": a.beta,
+            "view_eps": TRAIN_EPS, "upstream_linf_not_used": MAINI_LINF, "n_iter": a.n_iter,
+            "apgd_view_steps": view_steps, "alpha": a.alpha, "beta": a.beta,
             "tau": a.tau, "warmup": a.warmup, "lr_peak": a.lr_peak, "wd": a.wd,
             "bs": a.bs, "recipe": "locuslab/robust_union CIFAR10/train.py (50ep, np.interp lr); Linf radius changed 0.03 -> 8/255 for cross-arm comparability",
             "val_proxy_eps": PROXY_EPS, "best_val_worst_union": best,

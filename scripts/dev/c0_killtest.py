@@ -21,14 +21,16 @@ Backbone saw all of train, so absolute val robustness is optimistic — but the 
 RELATIVE (A2 vs A1 on identical val), so the shared bias cancels.
 """
 from __future__ import annotations
-import argparse, json, sys, hashlib, time
+import argparse, json, os, sys, hashlib, time
 from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-ROOT = Path("/mnt/c/Users/ADMIN/Documents/Claude/Projects/ATTACKDRO")
+# Portable root: $ATTACKDRO_ROOT if set (e.g. /content/attackdro on Colab), else this file's repo.
+ROOT = Path(os.environ["ATTACKDRO_ROOT"]) if os.environ.get("ATTACKDRO_ROOT") \
+    else Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "external/robust_union/CIFAR10/models"))

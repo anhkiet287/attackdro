@@ -38,6 +38,21 @@ def build_robust_union(ckpt_path, device):
     return m
 
 
+def build_robustdro(ckpt_path, device):
+    """robustdro PreActResNet18 in the in-repo {cfg, model} format (c5_fromscratch / train_full_msd
+    / finetune val_best). Construction is IDENTICAL to the frozen harness's load_eval_checkpoint
+    (build_model(ckpt['cfg']) + load_state_dict) — so the 8 white-box masks match eval_multinorm_audit
+    exactly. The ONLY reason to route a robustdro ckpt through here is --skip-square (fast no-Square
+    tier); the full-12 audit must still go through scripts/eval_multinorm_audit.py."""
+    import torch
+    from robustdro.models import build_model
+    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
+    model = build_model(ckpt["cfg"])
+    model.load_state_dict(ckpt["model"])
+    model.to(device).eval()
+    return model
+
+
 def build_eat_softplus(ckpt_path, device):
     import torch
     sys.path.insert(0, str(ROOT / "external/RAMP"))
@@ -92,7 +107,7 @@ def build_robustbench(ckpt_path, device):
 
 
 BUILDERS = {"robust_union_preact": build_robust_union, "eat_fast_softplus": build_eat_softplus,
-            "robustbench": build_robustbench}
+            "robustbench": build_robustbench, "robustdro": build_robustdro}
 
 
 def main():
