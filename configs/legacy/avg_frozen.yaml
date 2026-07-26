@@ -1,0 +1,14 @@
+# =============================================================================
+# avg_frozen.yaml — CARD-1: freeze q (DRO ablation ⟺ AVG in-house).
+# Inherits attackdro.yaml; the ONLY change is dro.freeze_q: true (q = 1/3 fixed).
+# Isolates the effect of the q-update from the training recipe, AND doubles as
+# our in-house AVG baseline (kills the recipe confound for the final table).
+# =============================================================================
+_base_: configs/legacy/attackdro.yaml
+
+method: attackdro          # same trainer (GroupDROTrainer); q just frozen
+run_name: avg_frozen
+
+train:
+  groupdro:
+    freeze_q: true         # q stays uniform (1/3, 1/3, 1/3) — no DRO update

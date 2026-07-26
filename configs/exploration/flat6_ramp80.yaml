@@ -1,0 +1,30 @@
+# Fixed 6/6/6 APGD control under locked RAMP80 protocol.
+_base_: configs/paper/reactive_ramprecipe.yaml
+
+seed: 0
+run_name: flat6_ramp80_apgd_8255_s0
+results_dir: results/
+
+wandb:
+  project: attackdro-union
+  entity: null
+  mode: online
+  required: true
+  group: ramp80_idea_compare_s0
+  tier: in-house
+  tags:
+    - ramp80
+    - apgd_train_6_6_6
+    - eval_20_20_100
+    - eps_8255
+    - seed0
+    - idea_compare
+    - idea:flat6
+
+train:
+  epochs: 80
+  save_freq: 10
+  attacks:
+    - {norm: linf, steps: 6, step_size: 0.00784313725, random_start: true}
+    - {norm: l2, steps: 6, step_size: 0.125, random_start: true}
+    - {norm: l1, steps: 6, step_size: 0.10, k: 20, gap: 0.05, random_k: true, random_start: false}

@@ -1,0 +1,21 @@
+# =============================================================================
+# bindaware_sample.yaml — CARD-3b: PER-SAMPLE SOFT binding-aware.
+# Inherits attackdro.yaml; the ONLY change is the objective aggregation:
+#   w_{i,g} = softmax_g(loss_{i,g} / T)  (detached), loss = mean_i sum_g w*loss.
+# T -> inf = AVG, T -> 0 = hard per-sample MAX (forbidden: MAX baseline = 25.0
+# proves hard max fails). Sweep T in {0.25, 0.5, 1, 2} via:
+#   --set train.groupdro.temperature=<T>
+# Amendment #1: per-norm loss distributions logged every epoch (dist/*); if
+# cross-norm scale bias appears, enable the declared-exception variant:
+#   --set train.groupdro.normalize_losses=zscore
+# =============================================================================
+_base_: configs/legacy/attackdro.yaml
+
+method: attackdro            # same trainer; different objective
+run_name: bindaware_sample
+
+train:
+  groupdro:
+    objective: per_sample_soft
+    temperature: 1.0         # sweep {0.25, 0.5, 1, 2}
+    normalize_losses: none   # none | zscore (declared exception, evidence-gated)

@@ -1,0 +1,149 @@
+# Program-A G2 frozen canonical audit preflight.
+# All four components are REQUIRED for every norm per locked v3-A A5.
+name: audit_cifar10_preactrn18_multinorm_v1
+dataset: cifar10
+split: test
+
+model:
+  arch: preact_resnet18
+  normalize: false
+
+subset:
+  n_examples: 1000
+  seed: 20260709
+  class_balanced: true
+  indices_path: results/audit/subsets/cifar10_testfinal_1000_seed20260709_v3A.json
+
+eps:
+  linf: 0.03137254901960784
+  l2: 0.5
+  l1: 12.0
+
+metrics:
+  clean_acc: true
+  primary_apgd_union: true
+  per_attack_acc: true
+  per_norm_audit_acc: true
+  per_norm_audit_gap: true
+  black_box_gap: true
+  full_audit_union: true
+  bootstrap_ci:
+    enabled: true
+    n_bootstrap: 1000
+    ci: 0.95
+    seed: 20260709
+
+attacks:
+  linf:
+    - name: apgd_ce_linf
+      type: apgd
+      norm: linf
+      eps_key: linf
+      loss: ce
+      steps: 100
+      restarts: 1
+      seed: 20260709
+      required: true
+    - name: apgd_dlr_linf
+      type: apgd
+      norm: linf
+      eps_key: linf
+      loss: dlr
+      steps: 100
+      restarts: 1
+      seed: 20260709
+      required: true
+    - name: fab_t_linf
+      type: fab
+      norm: linf
+      eps_key: linf
+      targeted: true
+      steps: 100
+      restarts: 1
+      seed: 20260709
+      required: true
+    - name: square_linf
+      type: square
+      norm: linf
+      eps_key: linf
+      queries: 5000
+      restarts: 1
+      seed: 20260709
+      required: true
+      black_box: true
+
+  l2:
+    - name: apgd_ce_l2
+      type: apgd
+      norm: l2
+      eps_key: l2
+      loss: ce
+      steps: 100
+      restarts: 1
+      seed: 20260709
+      required: true
+    - name: apgd_dlr_l2
+      type: apgd
+      norm: l2
+      eps_key: l2
+      loss: dlr
+      steps: 100
+      restarts: 1
+      seed: 20260709
+      required: true
+    - name: fab_t_l2
+      type: fab
+      norm: l2
+      eps_key: l2
+      targeted: true
+      steps: 100
+      restarts: 1
+      seed: 20260709
+      required: true
+    - name: square_l2
+      type: square
+      norm: l2
+      eps_key: l2
+      queries: 5000
+      restarts: 1
+      seed: 20260709
+      required: true
+      black_box: true
+
+  l1:
+    - name: apgd_ce_l1
+      type: apgd
+      norm: l1
+      eps_key: l1
+      loss: ce
+      steps: 100
+      restarts: 1
+      seed: 20260709
+      required: true
+    - name: apgd_dlr_l1
+      type: apgd
+      norm: l1
+      eps_key: l1
+      loss: dlr
+      steps: 100
+      restarts: 1
+      seed: 20260709
+      required: true
+    - name: fab_t_l1
+      type: fab
+      norm: l1
+      eps_key: l1
+      targeted: true
+      steps: 100
+      restarts: 1
+      seed: 20260709
+      required: true
+    - name: square_l1
+      type: square
+      norm: l1
+      eps_key: l1
+      queries: 5000
+      restarts: 1
+      seed: 20260709
+      required: true
+      black_box: true

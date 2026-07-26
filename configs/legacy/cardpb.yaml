@@ -1,0 +1,25 @@
+# =============================================================================
+# cardpb.yaml — CARD-PB predictive-binding union AT (the post-Gate-α method).
+# Inherits bindaware_sample (per-sample-soft loss machinery); the ONE change is
+# objective: predictive_binding — an EMA predictor φ forecasts each sample's
+# binding norm from its recent per-norm losses, the FULL attack budget goes to
+# the predicted norm, and a safety FLOOR (>=pb_k_floor steps) still hits the
+# others so a wrong φ can't open a robustness hole. Trains at the LOCKED 8/255.
+#
+# Efficiency claim: match reactive (per-sample soft T=0.25) union robustness at
+# <=60% MEASURED attack-FLOPs. Logs pb/attack_flops_ratio + phi/misprediction_rate.
+# =============================================================================
+_base_: configs/legacy/bindaware_sample.yaml
+
+method: attackdro
+run_name: predictive_pb_8255
+
+train:
+  groupdro:
+    objective: predictive_binding
+    temperature: 0.25       # same T as reactive soft (loss shape unchanged)
+    pb_beta: 0.5            # EMA memory of the binding predictor φ (ablation: {0.3,0.5,0.8})
+    pb_k_floor: 3           # safety floor: min attack steps per non-predicted norm
+    pb_recal_rho: 0.1       # fraction/batch fully attacked (unbiased φ signal + p measurement)
+    pb_cold_epochs: 5       # epochs of full reactive to seed φ before trusting it
+    pb_guard_pp: 3.0        # adaptive floor: bump a norm's floor if its probe drops >this vs own max

@@ -1,0 +1,81 @@
+# =============================================================================
+# base.yaml — THE PROTOCOL. Shared by every method config via `_base_`.
+#
+# Golden rule #1: the threat model + eps + attack config live here and here
+# ONLY. Method configs (pgd_at.yaml, avg.yaml, ...) inherit this file and may
+# override optimization/method knobs, but MUST NOT redefine threat_model eps or
+# the eval attack. One protocol for all methods.
+# =============================================================================
+
+seed: 0
+device: cuda            # falls back to cpu automatically if unavailable
+
+# ---- Data -------------------------------------------------------------------
+dataset:
+  name: cifar10
+  root: data/
+  num_classes: 10
+  num_workers: 4
+  # Adversarial training operates in [0,1] pixel space (no dataset normalization)
+  # so that epsilon has its literal pixel meaning and attacks are simple to
+  # reason about. Any mean/std standardization happens INSIDE the model (see
+  # model.normalize) — matches the locuslab/robust_union convention.
+
+# ---- Model ------------------------------------------------------------------
+model:
+  arch: preact_resnet18
+  normalize: false        # if true, apply CIFAR-10 mean/std inside the model
+
+# ---- Threat model (union of linf, l2, l1) — LOCKED PROTOCOL ------------------
+# RE-LOCKED 2026-07-05: eps_inf = 8/255 (the subfield's de-facto standard — RAMP,
+# E-AT, C&H, RobustBench). Was 0.03 (MSD-2020-specific) until now; 0.03 blocked
+# direct SOTA comparison, so we standardize on 8/255 to serve the method/SOTA
+# goal. eps_l2=0.5, eps_l1=12 unchanged. Provenance of the old 0.03 protocol:
+# configs/archive/base_eps003.yaml. All 0.03 eval JSONs -> results/archive/.
+# NOTE: in-house checkpoints were TRAINED at 0.03; re-evaluating them at 8/255 is
+# a mild train/eval mismatch (0.03 -> 0.03137, +4.6% eps) — flagged in the table;
+# a future clean run should train at 8/255. Do not change without re-evaluating
+# every model and baseline under the new value.
+#   linf = 8/255 = 0.031372...,  l2 = 0.5,  l1 = 12
+threat_model:
+  linf:
+    eps: 0.03137254901960784    # 8/255 — subfield-standard eps_inf (re-locked 2026-07-05)
+  l2:
+    eps: 0.5
+  l1:
+    eps: 12.0
+
+# ---- Evaluation attack (strong; used by eval_union) -------------------------
+# Golden rule #4: re-evaluate everything with a strong attack (APGD/AutoAttack)
+# under the SAME eps. These knobs are consumed by src/robustdro/eval.
+# Attack VERSION policy (P1): use `apgd` (APGD-CE + APGD-T) for ALL iteration /
+# head-to-head comparison; reserve `standard` (full AutoAttack) for FINAL paper
+# numbers only. `version` is a CLI flag (scripts/evaluate.py --version).
+# SCREENING budget (APGD, n=1000) set to per-norm CONVERGENCE PLATEAUS measured on RAMP
+# ep80 (P-04, 2026-07-07, n=1000): l∞ plateaus @20 (47.3), l2 @10-20 (65.8), l1 @100
+# (49.6 = l1@200 49.5; l1@50 50.1 is 0.5pp short). 20/20/100 reproduces 100/100/100
+# EXACTLY (union 46.0, Δ0.00) at 140 vs 300 steps (~53% faster). l1-heavy = F1-safe (never
+# under-attacks l1). FINAL claim rows use `--version standard` (full AutoAttack) regardless.
+# Re-confirm plateaus on the first in-house reactive run (convergence is model-dependent).
+eval_attack:
+  linf: { steps: 20,  restarts: 1 }
+  l2:   { steps: 20,  restarts: 1 }
+  l1:   { steps: 100, restarts: 1 }
+
+# ---- Logging / IO -----------------------------------------------------------
+# ---- W&B (standardized 2026-07-05) ------------------------------------------
+# ONE project for every in-house trainer + our harness evals, so all methods
+# compare on one dashboard. Run naming = {method}_{variant}_s{seed} (matches the
+# checkpoint/JSON convention). id is derived from run_name (WandbLogger) so a
+# later eval attaches its summary metrics to the SAME run as the training curves.
+# `tier` tags the comparison lane (in-house | repro | official). external/RAMP
+# keeps its own W&B; only its harness eval summary is mirrored here under `repro`.
+wandb:
+  mode: online            # online | offline | disabled (env WANDB_MODE overrides)
+  project: attackdro-union
+  entity: null            # null -> API key's default entity (kietna-ho-chi-minh-city-university-of-technology); "kietna" is NOT a valid entity
+  group: null             # optional: group related runs
+  tags: []                # auto-augmented per run with method/seed/tier
+  tier: in-house          # in-house | repro | official — comparison lane tag
+results_dir: results/
+checkpoints_dir: checkpoints/

@@ -1,0 +1,1 @@
+LOCKED Program-A protocol — ATLAS-CRITIC G1 PASS 2026-07-11.

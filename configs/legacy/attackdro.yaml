@@ -1,0 +1,41 @@
+# =============================================================================
+# attackdro.yaml — AttackDRO++ (GroupDRO over the (linf, l2, l1) union).
+# Inherits the LOCKED protocol from base.yaml (eps_inf=0.03, l2=0.5, l1=12).
+# P1 change vs the thesis: L1 is now a source attack (thesis used only linf/l2).
+# =============================================================================
+_base_: configs/legacy/base.yaml
+
+method: attackdro
+run_name: attackdro_union
+
+train:
+  epochs: 50
+  batch_size: 128
+  lr: 0.1
+  momentum: 0.9
+  weight_decay: 0.0005
+  lr_schedule: multistep
+  milestones: [25, 40]          # for 50 epochs (~50%, 80%)
+  save_freq: 10                 # checkpoint every N epochs -> ckpt/ep010.pt.. (epoch curves + PHASE-2 continuation)
+  attack: apgd                  # TRAINING inner-max = APGD (RAMP-matched: momentum+adaptive+best-iter, incl APGD-l1). was plain PGD; 'pgd' to revert. steps (10/10/10) = APGD n_iter.
+
+  groupdro:
+    eta_q: 0.02                 # q learning rate (log-space multiplicative update)
+    warmup_epochs: 0            # delay q updates (0 = update from epoch 0)
+    probe_binding: false        # Gate-alpha fixed indexed probe; opt in per run
+    probe_binding_size: 512
+    probe_binding_every: 1
+
+  # Union SOURCE attacks (one group each). eps comes from base.threat_model.
+  # RAMP-aligned TRAINING inner-max = uniform 10 steps (RAMP --at_iter 10, paper p8).
+  # Changed 2026-07-07 from 10/10/20 (l1 was 20 steps). Symmetric budget also simplifies
+  # CARD-PB's per-sample allocation (reactive training budget now 30 steps, not 40).
+  # EVAL stays l1-heavy / F1-safe (base.eval_attack) — training uniform-10 != eval uniform.
+  attacks:
+    - { norm: linf, steps: 10, step_size: 0.00784313725, random_start: true }   # 2/255
+    - { norm: l2,   steps: 10, step_size: 0.125,          random_start: true }
+    - { norm: l1,   steps: 10, step_size: 0.10, k: 20, gap: 0.05, random_k: true, random_start: false }  # was steps 20/step 0.05; step raised to keep l1 reach in 10 steps
+
+  # Cheap in-training union probe (NOT final eval — that is eval_union/APGD).
+  eval_pgd_steps: 20
+  eval_probe_batches: 8

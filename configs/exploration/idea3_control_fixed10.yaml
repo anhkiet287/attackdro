@@ -1,0 +1,9 @@
+# EXPLORATION Idea 3 CONTROL — fixed 10/10/10 from the start (Colab, NOT paper-grade).
+# The control for the curriculum comparison: identical recipe/eval, no ramp. ep30.
+_base_: configs/paper/reactive_ramprecipe.yaml
+run_name: idea3_control_fixed10
+results_dir: results/exploration/
+wandb:
+  tags: ["exploration:true", "device:colab", "idea:3_control"]
+train:
+  epochs: 30

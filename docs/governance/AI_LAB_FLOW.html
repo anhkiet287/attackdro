@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ATTACKDRO · AI Lab Flow</title>
+<style>
+  :root {
+    --ink: #12151c;
+    --paper: #eceae3;
+    --paper-2: #e3e0d6;
+    --line: #c9c5b8;
+    --line-strong: #b3ae9e;
+    --muted: #5b5f52;
+    --faint: #8a8d7f;
+    --pass: #2f6b4f;
+    --pass-bg: #d7e6db;
+    --block: #9a6a17;
+    --block-bg: #eee0c4;
+    --wait: #4a5568;
+    --wait-bg: #dcdcd2;
+    --accent: #b5451f;
+    --accent-2: #1f4d5c;
+    --claude: #1f4d5c;
+    --gpt: #6a4a17;
+    --codex: #3a5a3f;
+    --human: #b5451f;
+    --mono: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+
+  header { border-bottom: 2px solid var(--ink); padding: 40px 0 26px; margin-bottom: 8px; }
+  .kicker { font-family: var(--mono); font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  h1 { font-size: clamp(28px, 4.4vw, 48px); line-height: 1.03; margin: 12px 0 14px; font-weight: 700; letter-spacing: -0.01em; }
+  .standfirst { font-size: 16.5px; color: var(--muted); max-width: 74ch; margin: 0; }
+
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 26px 0 40px; padding: 14px 16px; background: var(--paper-2); border: 1px solid var(--line); font-family: var(--mono); font-size: 12px; }
+  .legend .item { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { width: 13px; height: 13px; border-radius: 2px; display: inline-block; border: 1px solid rgba(0,0,0,.15); }
+  .sw-claude { background: var(--claude); }
+  .sw-gpt { background: var(--gpt); }
+  .sw-codex { background: var(--codex); }
+  .sw-human { background: var(--human); }
+  .sw-gate { background: repeating-linear-gradient(45deg, var(--accent), var(--accent) 3px, #d97a52 3px, #d97a52 6px); }
+
+  section { margin: 0 0 52px; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; border-bottom: 1px solid var(--line-strong); padding-bottom: 8px; margin-bottom: 22px; }
+  .sec-num { font-family: var(--mono); font-size: 13px; color: var(--accent); font-weight: 700; }
+  .sec-head h2 { font-size: 24px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  .sec-head .note { margin-left: auto; font-size: 13px; color: var(--faint); font-family: var(--mono); }
+  .lead { font-size: 15px; color: var(--muted); max-width: 80ch; margin: 0 0 24px; }
+
+  .flow { position: relative; }
+  .step { position: relative; display: grid; grid-template-columns: 128px 1fr; gap: 0; margin-bottom: 0; }
+  .step .lane { display: flex; align-items: stretch; justify-content: flex-end; padding-right: 16px; }
+  .step .lane .chip { align-self: center; font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #fff; padding: 4px 9px; border-radius: 2px; white-space: nowrap; }
+  .chip.c-claude { background: var(--claude); }
+  .chip.c-gpt { background: var(--gpt); }
+  .chip.c-codex { background: var(--codex); }
+  .chip.c-human { background: var(--human); }
+  .chip.c-mech { background: var(--wait); }
+
+  .step .body { border-left: 2px solid var(--line-strong); padding: 0 0 24px 26px; position: relative; }
+  .step:last-child .body { border-left-color: transparent; }
+  .step .body::before { content: ""; position: absolute; left: -8px; top: 4px; width: 14px; height: 14px; border-radius: 50%; background: var(--paper); border: 2px solid var(--line-strong); }
+  .step.claude .body::before { border-color: var(--claude); }
+  .step.gpt .body::before { border-color: var(--gpt); }
+  .step.codex .body::before { border-color: var(--codex); }
+  .step.human .body::before { border-color: var(--human); background: var(--human); }
+  .step.mech .body::before { border-color: var(--wait); background: var(--wait); }
+
+  .card { background: var(--paper); border: 1px solid var(--line-strong); padding: 12px 16px; }
+  .card .t { font-size: 16px; font-weight: 700; margin: 0 0 3px; letter-spacing: -0.01em; }
+  .card .who { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent-2); font-weight: 700; }
+  .card .d { font-size: 13.5px; color: var(--muted); margin-top: 6px; }
+  .card .steplabel { display:inline-block; font-family: var(--mono); font-size: 10px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color: var(--wait); background: var(--wait-bg); padding: 1px 6px; border-radius: 2px; margin-left: 8px; vertical-align: middle; }
+
+  .step.gate .body::before { border-color: var(--accent); background: var(--accent); width: 16px; height: 16px; left: -9px; }
+  .card.gatecard { border: 2px solid var(--accent); background: var(--paper-2); }
+  .card.gatecard .t { color: var(--accent); }
+  .card.gatecard .gwho { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--accent-2); }
+  .card.gatecard .gtags { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .gtag { font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 2px; letter-spacing: 0.03em; background: var(--block-bg); color: var(--block); }
+
+  .card.humancard { border-left: 3px solid var(--human); }
+  .card.mechcard { background: var(--paper-2); border-style: dashed; }
+
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 2px; letter-spacing: 0.03em; }
+  .badge::before { content: "●"; font-size: 9px; }
+  .b-pass { color: var(--pass); background: var(--pass-bg); }
+  .b-block { color: var(--block); background: var(--block-bg); }
+  .b-wait { color: var(--wait); background: var(--wait-bg); }
+
+  .gates { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .gates th, .gates td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .gates thead th { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-2); border-bottom: 1px solid var(--line-strong); }
+  .gates td .gid { font-family: var(--mono); font-weight: 700; color: var(--accent); }
+  .gates tr.new td { background: var(--paper-2); }
+  .gates .mono { font-family: var(--mono); font-size: 12.5px; }
+
+  .matrix { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .matrix th, .matrix td { padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  .matrix thead th { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent-2); border-bottom: 1px solid var(--line-strong); }
+  .matrix td.role { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+  .matrix .yes { color: var(--pass); font-weight: 700; }
+  .matrix .no { color: var(--accent); font-weight: 700; }
+  .matrix .dash { color: var(--faint); }
+
+  .callout { border: 1px solid var(--line-strong); border-left: 3px solid var(--accent-2); background: var(--paper); padding: 14px 18px; font-size: 14px; margin-top: 22px; }
+  .callout b { font-variant: small-caps; letter-spacing: 0.03em; }
+  .callout.warn { border-left-color: var(--accent); }
+
+  footer { border-top: 2px solid var(--ink); margin-top: 20px; padding: 22px 0 60px; font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  @media (max-width: 760px) {
+    .step { grid-template-columns: 92px 1fr; }
+    .step .lane { padding-right: 10px; }
+    .step .body { padding-left: 20px; }
+    .legend { gap: 12px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .step { animation: rise .45s ease both; }
+    @keyframes rise { from { opacity: 0; transform: translateX(6px); } to { opacity: 1; transform: none; } }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="kicker">ATTACKDRO · AI LAB FLOW · v2 lean · 2026-07-11</div>
+    <h1>How a research task moves through the lab</h1>
+    <p class="standfirst">One task, top to bottom: from director intent, through Claude's plan and self-red-team, past the ChatGPT critic gate and the director's decision, into locked execution, audit, and back into the project state. Four roles, one per colored lane; striped nodes are the four hard gates; grey tags are folded-in steps, not separate agents.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="legend">
+    <span class="item"><span class="swatch sw-claude"></span> Claude · plan / coach / build</span>
+    <span class="item"><span class="swatch sw-gpt"></span> ChatGPT · critic</span>
+    <span class="item"><span class="swatch sw-codex"></span> Codex · run + audit</span>
+    <span class="item"><span class="swatch sw-human"></span> Kiet · LAB-DIRECTOR</span>
+    <span class="item"><span class="swatch sw-gate"></span> hard gate</span>
+  </div>
+
+  <!-- SECTION 1 — the pipeline -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">01</span>
+      <h2>The working pipeline</h2>
+      <span class="note">charter §3 · 4 roles</span>
+    </div>
+    <p class="lead">The full 13-step flow below is the <b>Tier C (critical)</b> lane — it runs only when a task hits a gate trigger. Most tasks are lighter: Chief triages first, and everyday work skips the critic entirely.</p>
+
+    <table class="gates" style="margin-bottom:28px;">
+      <thead><tr><th>Lane</th><th>When</th><th>Shape</th><th>Critic</th></tr></thead>
+      <tbody>
+        <tr><td><span class="gid">A</span> trivial</td><td>Format, refactor, read/summarize, re-analyze old results</td><td>Director → Chief → report <b>(~3 steps)</b></td><td class="mono">none</td></tr>
+        <tr><td><span class="gid">B</span> normal</td><td>Small experiment, single diagnostic run, draft analysis</td><td>Chief plan + light self-red-team → director → execute → record <b>(~5 steps)</b></td><td class="mono">optional</td></tr>
+        <tr class="new"><td><span class="gid">C</span> critical</td><td>Hits a trigger: lock (G1) · batch &gt;1 (G2) · claim (G3) · direction (G4)</td><td>The full pipeline below <b>(13 steps)</b></td><td class="mono">mandatory</td></tr>
+      </tbody>
+    </table>
+    <p class="lead"><b>Trigger test</b> (Chief, 5 sec): does the task lock a protocol/threshold/metric · spend &gt;1-run compute · make a paper claim · or change direction? Any yes → Tier C. Gate the <i>decision</i>, not the exploratory run.</p>
+
+    <div class="flow">
+
+      <div class="step human">
+        <div class="lane"><span class="chip c-human">Director</span></div>
+        <div class="body"><div class="card humancard">
+          <div class="who">Kiet · input</div>
+          <div class="t">Director input</div>
+          <div class="d">States the question, idea, or task. Sets the pace mode (SLOW_LEARNING for anything new).</div>
+        </div></div>
+      </div>
+
+      <div class="step claude">
+        <div class="lane"><span class="chip c-claude">Claude-Chief</span></div>
+        <div class="body"><div class="card">
+          <div class="who">CL1 · normalize + plan + coach</div>
+          <div class="t">Chief normalization <span class="steplabel">+ SITUATE step</span></div>
+          <div class="d">Restates intent, gathers prior work, decomposes the problem, drafts the proposal / task contract. Coaches methodology and keeps the learning log.</div>
+        </div></div>
+      </div>
+
+      <div class="step claude">
+        <div class="lane"><span class="chip c-claude">Claude-Chief</span></div>
+        <div class="body"><div class="card">
+          <div class="who">CL1 · step, not a separate role</div>
+          <div class="t">Self-red-team <span class="steplabel">step</span></div>
+          <div class="d">Claude attacks its own plan — confounds, validity threats, leakage. Findings go to the director <b>only</b>, never into the critic packet.</div>
+        </div></div>
+      </div>
+
+      <div class="step human">
+        <div class="lane"><span class="chip c-human">Director</span></div>
+        <div class="body"><div class="card humancard">
+          <div class="who">Kiet · gate 1 of 2</div>
+          <div class="t">Director intent gate</div>
+          <div class="d">Confirms Claude understood the intent correctly before anything goes to the critic. Approval is never inferred from silence.</div>
+        </div></div>
+      </div>
+
+      <div class="step mech">
+        <div class="lane"><span class="chip c-mech">Mechanism</span></div>
+        <div class="body"><div class="card mechcard">
+          <div class="who">packaged by Claude-Chief</div>
+          <div class="t">Clean critic packet</div>
+          <div class="d">Intent · question · proposed action · rationale · assumptions · evidence · alternatives · scope · prohibited actions. <b>No verdict, no framing, no self-red-team.</b></div>
+        </div></div>
+      </div>
+
+      <div class="step gpt gate">
+        <div class="lane"><span class="chip c-gpt">Atlas-Critic</span></div>
+        <div class="body"><div class="card gatecard">
+          <div class="gwho">A1 · ChatGPT · independent review + citation check</div>
+          <div class="t">Critic review — the hard gate</div>
+          <div class="d">Reviews fresh from the clean packet; verifies citations (VERIFIED/…/REJECTED). Returns Pass / Concern / Blocker with evidence. Fires only at G1–G4 (see below); silent otherwise.</div>
+          <div class="gtags"><span class="gtag">G1 threshold</span><span class="gtag">G2 multi-run</span><span class="gtag">G3 claim</span><span class="gtag">G4 direction</span></div>
+        </div></div>
+      </div>
+
+      <div class="step human">
+        <div class="lane"><span class="chip c-human">Director</span></div>
+        <div class="body"><div class="card humancard">
+          <div class="who">Kiet · gate 2 of 2</div>
+          <div class="t">Director decision gate</div>
+          <div class="d">Weighs the self-red-team against the critic verdict, resolves every Concern, and makes the go/no-go. G1/G3 need a critic Pass — no override shortcut.</div>
+        </div></div>
+      </div>
+
+      <div class="step mech">
+        <div class="lane"><span class="chip c-mech">Contract</span></div>
+        <div class="body"><div class="card mechcard">
+          <div class="who">locked by director</div>
+          <div class="t">Locked execution contract</div>
+          <div class="d">Scope, metric, data-split roles, compute budget, stopping rule — all frozen. Ambiguity → stop &amp; re-lock, never a convenient reading.</div>
+        </div></div>
+      </div>
+
+      <div class="step claude">
+        <div class="lane"><span class="chip c-claude">Claude-Builder</span></div>
+        <div class="body"><div class="card">
+          <div class="who">CL2 · Claude Code · patch</div>
+          <div class="t">Repo patch (if needed)</div>
+          <div class="d">Implements code changes strictly inside the contract. Never touches protocol, thresholds, or config-derived constants.</div>
+        </div></div>
+      </div>
+
+      <div class="step codex">
+        <div class="lane"><span class="chip c-codex">Codex-Runner</span></div>
+        <div class="body"><div class="card">
+          <div class="who">X1 · execute</div>
+          <div class="t">Controlled execution</div>
+          <div class="d">Runs the approved job on the GPU host, reports commands + exit codes verbatim, writes artifacts to <span style="font-family:var(--mono)">results/&lt;run&gt;/s&lt;seed&gt;/</span>.</div>
+        </div></div>
+      </div>
+
+      <div class="step codex">
+        <div class="lane"><span class="chip c-codex">Codex-Runner</span></div>
+        <div class="body"><div class="card">
+          <div class="who">X1 · step, not a separate role</div>
+          <div class="t">Deterministic audit <span class="steplabel">step</span></div>
+          <div class="d">Version-controlled gatekeeper scripts emit PASS/FAIL tokens and block protected-test-set misuse. The script is fixed and un-editable mid-run — that is what keeps the audit independent.</div>
+        </div></div>
+      </div>
+
+      <div class="step human">
+        <div class="lane"><span class="chip c-human">Director</span></div>
+        <div class="body"><div class="card humancard">
+          <div class="who">Kiet · interpret</div>
+          <div class="t">Director interpretation</div>
+          <div class="d">Reads the audited result, decides what it means, and what could change his mind. Result becomes evidence only after audit + interpretation.</div>
+        </div></div>
+      </div>
+
+      <div class="step claude">
+        <div class="lane"><span class="chip c-claude">Claude-Chief</span></div>
+        <div class="body"><div class="card">
+          <div class="who">CL1 · record</div>
+          <div class="t">Project state + learning log</div>
+          <div class="d">Writes the outcome into STATE.md — critic verdict and director decision recorded <b>verbatim</b>; negative results preserved, never softened.</div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- SECTION 2 — the gates -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">02</span>
+      <h2>The four critic gates</h2>
+      <span class="note">outside these · critic is silent</span>
+    </div>
+    <p class="lead">The critic step above fires only at these four moments — the high-cost, hard-to-reverse decisions. G4 is new in v2 because the planner now also authors the plan, making a direction change the point most likely to drift.</p>
+    <table class="gates">
+      <thead><tr><th>Gate</th><th>Fires before</th><th>Why it exists</th><th>Rule</th></tr></thead>
+      <tbody>
+        <tr><td><span class="gid">G1</span></td><td>Locking a threshold / pre-registration</td><td>Commitment that cannot be walked back after seeing results</td><td class="mono">critic Pass required</td></tr>
+        <tr><td><span class="gid">G2</span></td><td>Launching &gt;1 training run (or high-compute run)</td><td>Spends real compute via the runner</td><td class="mono">director + Pass</td></tr>
+        <tr><td><span class="gid">G3</span></td><td>Writing a final / authorized paper claim</td><td>Claim formation — the scientific output itself</td><td class="mono">critic Pass required</td></tr>
+        <tr class="new"><td><span class="gid">G4</span></td><td>Changing research direction (arm / hypothesis / method)</td><td>NEW — drift point now that planner authors the plan</td><td class="mono">director + Pass</td></tr>
+      </tbody>
+    </table>
+    <div class="callout">
+      <b>Verdict states.</b> <span class="badge b-pass">Pass</span> proceed · <span class="badge b-block">Concern</span> proceed only after the director resolves it · <span class="badge b-wait">Blocker</span> stop until fixed and re-reviewed. Every feedback item is closed ACCEPTED or REJECTED with rationale — silent skipping is banned.
+    </div>
+  </section>
+
+  <!-- SECTION 3 — responsibility matrix -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">03</span>
+      <h2>Who may do what</h2>
+      <span class="note">4 roles · separation of duties</span>
+    </div>
+    <p class="lead">The core of the swap is separation: whoever plans may not approve, and whoever approves may not plan. Execution is a third party again. Merging 7→4 only collapsed steps within each side — the four columns of duty stay separated.</p>
+    <table class="matrix">
+      <thead>
+        <tr><th>Role</th><th>Plan</th><th>Approve / gate</th><th>Execute</th><th>Interpret</th><th>Write state</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="role">Director (Kiet)</td><td class="yes">decides</td><td class="yes">final</td><td class="no">no</td><td class="yes">owns</td><td class="yes">authorizes</td></tr>
+        <tr><td class="role">Claude-Chief</td><td class="yes">yes</td><td class="no">no</td><td class="dash">via builder</td><td class="dash">assists</td><td class="yes">records*</td></tr>
+        <tr><td class="role">Claude-Builder</td><td class="no">no</td><td class="no">no</td><td class="yes">patch</td><td class="no">no</td><td class="no">no</td></tr>
+        <tr><td class="role">Atlas-Critic</td><td class="no">no</td><td class="yes">gate</td><td class="no">no</td><td class="dash">challenges</td><td class="no">no</td></tr>
+        <tr><td class="role">Codex-Runner</td><td class="no">no</td><td class="dash">deterministic audit</td><td class="yes">run</td><td class="no">no</td><td class="no">no</td></tr>
+      </tbody>
+    </table>
+    <div class="callout warn">
+      <b>* State-writing guard.</b> Claude-Chief records outcomes but may not alter or soften a critic verdict, director decision, or negative result — those are written verbatim (charter Rule 6). This is the guard against the planner also owning the record.
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="wrap" style="display:flex; justify-content:space-between; width:100%; flex-wrap:wrap; gap:10px;">
+    <span>ATTACKDRO · AI lab flow v2 lean · pipeline + gates</span>
+    <span>Role detail → AI_LAB_ROLES.md · Governance → RESEARCH_CHARTER.md · Status → STATE.md</span>
+  </div>
+</footer>
+</body>
+</html>

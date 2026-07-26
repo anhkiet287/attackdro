@@ -1,0 +1,84 @@
+# Tier 2 multi-attack extension (v1) — SETUP / DRY-RUN ONLY.
+#
+# SCOPE CAVEAT (must be reproduced in any Tier 2 config/report):
+#   "Tier 2 v1 adds independent multi-attack checks only for L2; Linf and L1
+#    remain AA-component-only in this version."
+#
+# This file defines the config surface only. As of the git commit that
+# introduces it, NO cw_l2 / ddn_l2 implementation is available in the
+# environment (torchattacks / foolbox / ART all missing; autoattack and
+# robustbench provide neither a min-norm CW-L2 nor DDN-L2). Tier 2 eval is
+# therefore BLOCKED pending an implementation asset AND an explicitly
+# supplied/approved calibration checkpoint. Do not run robust-checkpoint
+# Tier 2 eval or calibration from this config without a new approval.
+
+name: audit_cifar10_preactrn18_multiattack_v1
+extends: audit_cifar10_preactrn18_multinorm_v1
+tier: 2
+status: dry_run_only
+
+dataset: cifar10
+split: test
+
+model:
+  arch: preact_resnet18
+  normalize: false
+
+# Reuse the exact Tier 1 subset (same indices file + sha) for comparability.
+subset:
+  n_examples: 1000
+  seed: 20260709
+  class_balanced: true
+  indices_path: results/audit/subsets/cifar10_test_1000_seed20260709.json
+
+eps:
+  linf: 0.03137254901960784
+  l2: 0.5
+  l1: 12.0
+
+# L2-only independent multi-attack extension. Linf/L1 stay AA-component-only.
+tier2:
+  norms: [l2]
+  linf_l1_policy: aa_component_only
+
+  # CW-L2 MUST be min-norm-then-threshold (NOT projected-into-ball CW).
+  #   success := misclassification AND ||delta||_2 <= threshold_l2
+  # If only a projected/ambiguous CW variant is available, STOP and report;
+  # do not treat it as min-norm-threshold CW.
+  success_definition: min_norm_then_threshold
+  threshold_l2: 0.5
+  calibration_success_definition: "misclassification AND ||delta||_2 <= 0.5 on clean-correct subset"
+
+  attacks:
+    - name: cw_l2
+      type: cw
+      norm: l2
+      variant: min_norm_then_threshold   # REQUIRED semantics; reject projected-CW
+      threshold_l2: 0.5
+      steps: 1000
+      binary_search_steps: 9
+      initial_const: 0.001
+      lr: 0.01
+      restarts: 1
+      seed: 20260709
+      required: false
+      returns_perturbation_norm: required   # impl must expose ||delta||_2 to apply threshold
+
+    - name: ddn_l2
+      type: ddn
+      norm: l2
+      threshold_l2: 0.5
+      steps: 1000
+      gamma: 0.05
+      init_norm: 1.0
+      restarts: 1
+      seed: 20260709
+      required: false
+      returns_perturbation_norm: required
+
+# Calibration must use an explicitly supplied/approved checkpoint.
+# DO NOT auto-select. DO NOT use idea1 last.pt.
+calibration:
+  checkpoint: null            # must be supplied/approved by Kiet before any calibration run
+  subset: clean_correct
+  blocked_reason: "no provenance-verified calibration asset supplied; Tier 2 impl unavailable"

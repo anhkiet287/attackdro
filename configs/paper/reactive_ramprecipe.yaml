@@ -1,0 +1,11 @@
+# Paper reactive reference: per-sample soft binding-aware objective, T=0.25.
+
+_base_: configs/paper/base_ramp_apgd_8255.yaml
+
+run_name: reactive_ramprecipe
+
+train:
+  groupdro:
+    objective: per_sample_soft
+    temperature: 0.25
+    normalize_losses: none

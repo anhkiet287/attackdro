@@ -1,0 +1,35 @@
+# B4 Route A-Diagnostic one-run launch config.
+# Authorized by the Critic gate recorded in docs/STATE_LOG.md.
+# Inherits the B1 locked RAMP80/APGD 10/10/10 train49k/val1k protocol.
+
+_base_: configs/paper/reactive_softT_full10_ramp80_apgd_8255_t49k_v1k.yaml
+
+# run_paths() strips the trailing _s0 for local layout, yielding:
+# results/b4_predictive_refresh_routeA_diag_ramp80_apgd_8255_t49k_v1k/s0/
+run_name: b4_predictive_refresh_routeA_diag_ramp80_apgd_8255_t49k_v1k_s0
+
+wandb:
+  tags:
+    - cifar10
+    - prn18
+    - ramp80
+    - eps8255
+    - apgd-train-10-10-10
+    - eval-20-20-100
+    - t49k-v1k
+    - seed0
+    - screen
+    - family-predictive-allocation
+    - variant-routeA-diagnostic
+    - b4
+    - one-run-authorized
+  tier: in-house
+
+train:
+  allocation_mode: predictive_refresh
+  predictive_refresh_every_n_batches: 10
+  predictive_starvation_floor_batches: 30
+  predictive_ema_alpha: 0.9
+  predictive_use_cheap_probe: false
+  predictive_score_rule: loss_plus_bind
+  predictive_log_batch_trace: true

@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ATTACKDRO · AI Lab Roles · v2 (lean)</title>
+<style>
+  :root {
+    --ink: #12151c;
+    --paper: #eceae3;
+    --paper-2: #e3e0d6;
+    --line: #c9c5b8;
+    --line-strong: #b3ae9e;
+    --muted: #5b5f52;
+    --faint: #8a8d7f;
+    --pass: #2f6b4f;
+    --pass-bg: #d7e6db;
+    --block: #9a6a17;
+    --block-bg: #eee0c4;
+    --wait: #4a5568;
+    --wait-bg: #dcdcd2;
+    --accent: #b5451f;
+    --accent-2: #1f4d5c;
+    --mono: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px; }
+
+  header {
+    border-bottom: 2px solid var(--ink);
+    padding: 40px 0 26px;
+    margin-bottom: 8px;
+  }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  h1 {
+    font-size: clamp(30px, 4.6vw, 52px);
+    line-height: 1.02;
+    margin: 12px 0 14px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .standfirst {
+    font-size: 17px;
+    color: var(--muted);
+    max-width: 74ch;
+    margin: 0;
+  }
+  .central-claim {
+    margin-top: 20px;
+    padding: 14px 18px;
+    border-left: 3px solid var(--accent);
+    background: var(--paper-2);
+    font-size: 15px;
+    max-width: 82ch;
+  }
+  .central-claim b { font-variant: small-caps; letter-spacing: 0.03em; }
+  .central-claim .rule { display:block; font-family: var(--mono); font-size: 12.5px; color: var(--ink); margin-top: 8px; }
+
+  .swapbar {
+    margin-top: 16px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    font-family: var(--mono); font-size: 12.5px; color: var(--ink);
+    background: var(--paper); border: 1px solid var(--line-strong); border-left: 3px solid var(--accent-2);
+    padding: 12px 16px; max-width: 82ch;
+  }
+  .swapbar .tag { font-weight: 700; color: var(--accent); letter-spacing: 0.06em; }
+  .swapbar .arrow { color: var(--faint); }
+  .swapbar .was { text-decoration: line-through; color: var(--faint); }
+  .swapbar .now { color: var(--accent-2); font-weight: 700; }
+
+  .strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin: 30px 0 44px;
+  }
+  .strip .cell { background: var(--paper); padding: 16px 18px; }
+  .strip .big { font-family: var(--mono); font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+  .strip .cap { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+
+  section { margin: 0 0 52px; }
+  .sec-head {
+    display: flex; align-items: baseline; gap: 14px;
+    border-bottom: 1px solid var(--line-strong);
+    padding-bottom: 8px; margin-bottom: 22px;
+  }
+  .sec-num { font-family: var(--mono); font-size: 13px; color: var(--accent); font-weight: 700; }
+  .sec-head h2 { font-size: 25px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  .sec-head .note { margin-left: auto; font-size: 13px; color: var(--faint); font-family: var(--mono); }
+
+  .lead { font-size: 15.5px; color: var(--muted); max-width: 80ch; margin: 0 0 22px; }
+
+  .pipe { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .node {
+    border: 1px solid var(--line-strong);
+    background: var(--paper);
+    padding: 14px 14px 16px;
+    position: relative;
+  }
+  .node .role { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-2); font-weight: 700; }
+  .node .who { font-size: 17px; font-weight: 700; margin: 5px 0 6px; }
+  .node .does { font-size: 13px; color: var(--muted); }
+  .node.owner { border-color: var(--accent); border-width: 2px; }
+  .node.critic { background: var(--paper-2); }
+  .node.planner { border-color: var(--accent-2); border-width: 2px; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    padding: 3px 8px; border-radius: 2px; letter-spacing: 0.03em;
+  }
+  .badge::before { content: "●"; font-size: 9px; }
+  .b-pass { color: var(--pass); background: var(--pass-bg); }
+  .b-block { color: var(--block); background: var(--block-bg); }
+  .b-wait { color: var(--wait); background: var(--wait-bg); }
+  .b-plain { color: var(--accent-2); background: var(--paper-2); }
+  .b-plain::before { content: none; }
+
+  .role-card {
+    border: 1px solid var(--line-strong);
+    background: var(--paper);
+    margin-bottom: 16px;
+  }
+  .role-card .top {
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--paper-2);
+  }
+  .role-card .rid { font-family: var(--mono); font-size: 12px; color: var(--accent); font-weight: 700; }
+  .role-card .rname { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .role-card .rplat { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-2); font-weight: 700; }
+  .role-card .rtag { margin-left: auto; }
+
+  .role-card .cols { display: grid; grid-template-columns: 1.15fr 1fr; gap: 0; }
+  .role-card .col { padding: 16px 18px; }
+  .role-card .col.left { border-right: 1px solid var(--line); }
+  .role-card h5 {
+    margin: 0 0 8px; font-family: var(--mono); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent-2);
+  }
+  .role-card h5.stop-h { color: var(--accent); }
+  .role-card h5.step-h { color: var(--wait); }
+  .role-card ul { margin: 0 0 16px; padding-left: 18px; }
+  .role-card ul:last-child { margin-bottom: 0; }
+  .role-card li { font-size: 13.5px; margin: 5px 0; color: var(--ink); }
+  .role-card li b { font-family: var(--mono); font-size: 12.5px; font-weight: 700; }
+  .steptag { display:inline-block; font-family: var(--mono); font-size: 10px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color: var(--wait); background: var(--wait-bg); padding: 1px 6px; border-radius: 2px; margin-right: 6px; }
+
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 13px; }
+  .kv dt { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 700; padding-top: 2px; }
+  .kv dd { margin: 0; color: var(--ink); }
+  .kv dd .mono { font-family: var(--mono); font-size: 12px; }
+  .kv .handoff { color: var(--accent-2); font-family: var(--mono); font-size: 12px; }
+
+  .map { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .map .box { border: 1px solid var(--line-strong); background: var(--paper); padding: 16px 18px; }
+  .map .box.keep { border-left: 3px solid var(--pass); }
+  .map .box.avoid { border-left: 3px solid var(--block); }
+  .map .box h3 { margin: 0 0 3px; font-size: 17px; }
+  .map .box .sub { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); margin-bottom: 12px; }
+  .map .box ul { margin: 0; padding-left: 0; list-style: none; }
+  .map .box li { padding: 6px 0; border-bottom: 1px dotted var(--line); font-size: 13.5px; }
+  .map .box li:last-child { border-bottom: 0; }
+  .map .box li .f { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--ink); }
+  .map .box li .d { color: var(--muted); }
+
+  .tree {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.7;
+    background: var(--paper-2); border: 1px solid var(--line);
+    padding: 16px 18px; white-space: pre; overflow-x: auto; color: var(--ink);
+    margin-top: 18px;
+  }
+  .tree .c { color: var(--accent); }
+  .tree .g { color: var(--faint); }
+
+  .callout {
+    border: 1px solid var(--line-strong);
+    border-left: 3px solid var(--accent-2);
+    background: var(--paper);
+    padding: 14px 18px; font-size: 14px; margin-top: 18px;
+  }
+  .callout b { font-variant: small-caps; letter-spacing: 0.03em; }
+  .callout.warn { border-left-color: var(--accent); }
+
+  .gates { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .gates th, .gates td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .gates thead th { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-2); border-bottom: 1px solid var(--line-strong); }
+  .gates td .gid { font-family: var(--mono); font-weight: 700; color: var(--accent); }
+  .gates tr.new td { background: var(--paper-2); }
+  .gates .mono { font-family: var(--mono); font-size: 12.5px; }
+
+  footer {
+    border-top: 2px solid var(--ink);
+    margin-top: 20px; padding: 22px 0 60px;
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  }
+
+  @media (max-width: 900px) {
+    .strip { grid-template-columns: repeat(2, 1fr); }
+    .pipe { grid-template-columns: repeat(2, 1fr); }
+    .role-card .cols { grid-template-columns: 1fr; }
+    .role-card .col.left { border-right: 0; border-bottom: 1px solid var(--line); }
+    .map { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    section { animation: rise .5s ease both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="kicker">ATTACKDRO · AI LAB ROLES · registry v2 lean · 2026-07-11</div>
+    <h1>Personal AI lab — the role registry</h1>
+    <p class="standfirst">The stable map of every agent in the lab: who does what, what they may never do, what goes in, what comes out, and where each hands off. Four roles, one per context — extra work lives as steps inside a role, not as separate agents.</p>
+    <div class="central-claim">
+      <b>Human authority.</b> <b>LAB-DIRECTOR</b> (Kiet) is the only role authorized to approve hypotheses, protocol changes, launches, scientific claims, and submission decisions. Agents advise, draft, execute, and verify — they never self-authorize.
+      <span class="rule">This document defines stable role boundaries. · Current experiment status lives in docs/STATE.md · Operational prompt detail lives in prompts/. · Governed by docs/governance/RESEARCH_CHARTER.md</span>
+    </div>
+    <div class="swapbar">
+      <span class="tag">v2 SWAP · LEAN</span>
+      <span>Planner <span class="arrow">=</span> <span class="was">ChatGPT</span> <span class="arrow">→</span> <span class="now">Claude (Opus)</span></span>
+      <span class="arrow">·</span>
+      <span>Critic <span class="arrow">=</span> <span class="was">Claude</span> <span class="arrow">→</span> <span class="now">ChatGPT (Atlas)</span></span>
+      <span class="arrow">·</span>
+      <span>7 <span class="arrow">→</span> <span class="now">4 roles</span></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="strip">
+    <div class="cell"><div class="big">3</div><div class="cap">Platforms — Claude, Atlas (ChatGPT), Codex</div></div>
+    <div class="cell"><div class="big">4</div><div class="cap">Agent roles — one per context, each a fixed contract</div></div>
+    <div class="cell"><div class="big">1</div><div class="cap">Human — LAB-DIRECTOR holds every go/no-go</div></div>
+    <div class="cell"><div class="big">4</div><div class="cap">Critic gates: threshold · multi-run · claim · direction</div></div>
+  </div>
+
+  <!-- SECTION 1 — the lab at a glance -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">01</span>
+      <h2>The lab at a glance</h2>
+      <span class="note">one role per context · one planner active</span>
+    </div>
+    <p class="lead">Work flows through fixed platforms. Claude plans, coaches, and patches; ChatGPT criticizes independently; Codex runs and audits. The director bridges and owns every decision. A role is a context you switch into — self-red-team, literature, and audit are steps folded into a role, not separate agents.</p>
+    <div class="pipe">
+      <div class="node planner"><div class="role">Platform · Claude</div><div class="who">Claude (Opus)</div><div class="does">Chief planner + coach, and the repo builder. Writes contracts, keeps state, self-red-teams.</div></div>
+      <div class="node critic"><div class="role">Platform · Atlas</div><div class="who">ChatGPT</div><div class="does">Independent critic. Gates the plan and checks citation integrity. Never plans.</div></div>
+      <div class="node"><div class="role">Platform · Codex</div><div class="who">Codex</div><div class="does">Runner. Controlled execution plus the deterministic gatekeeper audit.</div></div>
+      <div class="node owner"><div class="role">Human · Final</div><div class="who">Kiet</div><div class="does">LAB-DIRECTOR. Bridge and final owner of every threshold, launch, and claim.</div></div>
+    </div>
+    <div class="callout warn">
+      <b>Why the swap has guards.</b> With Claude now planning <i>and</i> patching <i>and</i> holding STATE, the only independent, non-Claude check besides the director is ChatGPT. Two mechanisms protect independence: (1) Claude runs a <b>self-red-team</b> that goes to the director only — never into the critic packet; (2) Claude hands ChatGPT a <b>clean critic packet</b> with no verdict or framing, so the critic reviews fresh. G1 (threshold) and G3 (claim) require a ChatGPT Pass with no owner-override shortcut.
+    </div>
+  </section>
+
+  <!-- SECTION 2 — Claude roles -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">02</span>
+      <h2>Claude · Opus</h2>
+      <span class="note">plan · coach · build — never self-approve</span>
+    </div>
+    <p class="lead">Claude is the planning platform, in two contexts: the planning chat (Chief) and the repo (Builder). Chief converts director intent into contracts, coaches methodology, keeps state, and red-teams its own plan before every gate. Builder patches the repo under a locked contract. Neither approves its own work.</p>
+
+    <div class="role-card">
+      <div class="top">
+        <span class="rid">CL1</span>
+        <span class="rname">CLAUDE-CHIEF</span>
+        <span class="rplat">Claude · planner + coach</span>
+        <span class="rtag badge b-plain">sole planner</span>
+      </div>
+      <div class="cols">
+        <div class="col left">
+          <h5>Main tasks</h5>
+          <ul>
+            <li>Sole planner: normalizes director intent, writes requirements, orders the run queue, drafts atomic task contracts.</li>
+            <li>Coach: runs the Learning / Scientific-Reasoning loops, teaches methodology (<b>FRAME→…→REFLECT</b>), holds new ideas in <b>SLOW_LEARNING</b>.</li>
+            <li>Owns and versions <b>STATE.md</b>.</li>
+          </ul>
+          <h5 class="step-h">Folded-in steps</h5>
+          <ul>
+            <li><span class="steptag">SITUATE</span>Gathers prior work (concept-check → prior-work scan) as planning input.</li>
+            <li><span class="steptag">self-red-team</span>Before every gate, attacks its own plan — confounds, validity threats, leakage. Output goes to the <b>director only</b>, never into the critic packet.</li>
+            <li><span class="steptag">packet</span>Packages the clean critic packet (no verdict) for ATLAS-CRITIC.</li>
+          </ul>
+          <h5 class="stop-h">Never does</h5>
+          <ul>
+            <li>Approve its own plan, lock a threshold, or authorize compute (Rule 2 — no self-approval).</li>
+            <li>Launch training runs or touch the protected test set.</li>
+            <li>Alter or soften a recorded critic verdict or negative result in state (Rule 6).</li>
+          </ul>
+        </div>
+        <div class="col">
+          <dl class="kv">
+            <dt>Input</dt><dd>Director intent, STATE.md, result JSONs, audit reports.</dd>
+            <dt>Output</dt><dd>Task contracts, run queue, requirement specs, updated state, learning log, critic packet.</dd>
+            <dt>Handoff</dt><dd><span class="handoff">→ ATLAS-CRITIC</span> (clean packet at gates) · <span class="handoff">→ CLAUDE-BUILDER</span> (patch) · <span class="handoff">→ CODEX-RUNNER</span> (run) · <span class="handoff">→ LAB-DIRECTOR</span> (intent + decision gates).</dd>
+            <dt>Approval</dt><dd>Director approves every hypothesis, protocol change, and launch; G1/G3 also require a ChatGPT critic Pass.</dd>
+            <dt>W&amp;B</dt><dd>Reads run metrics only. Never creates, renames, or deletes runs.</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <div class="role-card">
+      <div class="top">
+        <span class="rid">CL2</span>
+        <span class="rname">CLAUDE-BUILDER</span>
+        <span class="rplat">Claude Code · patcher</span>
+        <span class="rtag badge b-plain">atomic contracts</span>
+      </div>
+      <div class="cols">
+        <div class="col left">
+          <h5>Main tasks</h5>
+          <ul>
+            <li>Repo-wide code changes under a single atomic task contract from CLAUDE-CHIEF.</li>
+            <li>Implements patches, refactors, and logging hooks; wires gatekeeper checks when contracted.</li>
+            <li>Every handoff carries a summary of what Codex already did — no re-reading the repo.</li>
+          </ul>
+          <h5 class="stop-h">Never does</h5>
+          <ul>
+            <li>Change protocol, thresholds, or metrics.</li>
+            <li>Launch training or expand scope beyond the contract.</li>
+            <li>Hardcode values that must be parsed from config.</li>
+          </ul>
+        </div>
+        <div class="col">
+          <dl class="kv">
+            <dt>Input</dt><dd>Atomic task contract + summary of Codex's last actions/results.</dd>
+            <dt>Output</dt><dd>Code diff / PR, patch notes, changed configs.</dd>
+            <dt>Handoff</dt><dd><span class="handoff">→ CODEX-RUNNER</span> (verify + run).</dd>
+            <dt>Approval</dt><dd>Director approves merging any protocol-affecting change.</dd>
+            <dt>W&amp;B</dt><dd>May add logging hooks; never manages runs.</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3 — Atlas / ChatGPT role -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">03</span>
+      <h2>Atlas · ChatGPT</h2>
+      <span class="note">criticize — never plan</span>
+    </div>
+    <p class="lead">ChatGPT is the independent-review platform, one context. It gates the plan at four fixed moments and, as part of that review, audits the literature and citations the plan rests on. It judges and challenges; it never plans, launches, or patches.</p>
+
+    <div class="role-card">
+      <div class="top">
+        <span class="rid">A1</span>
+        <span class="rname">ATLAS-CRITIC</span>
+        <span class="rplat">ChatGPT · second opinion</span>
+        <span class="rtag badge b-wait">silent between gates</span>
+      </div>
+      <div class="cols">
+        <div class="col left">
+          <h5>Main tasks</h5>
+          <ul>
+            <li>Independent review at exactly four gates: <b>G1 threshold lock</b>, <b>G2 launch &gt;1 run</b>, <b>G3 final paper claim</b>, <b>G4 direction change</b>.</li>
+            <li>Receives only the <b>clean critic packet</b> — never inherits Claude's verdict, framing, or presumed director preference (Rule 3).</li>
+            <li>Returns <b>Pass / Concern / Blocker</b> with evidence; every item is closed ACCEPTED or REJECTED + rationale — silent skipping is banned.</li>
+          </ul>
+          <h5 class="step-h">Folded-in step</h5>
+          <ul>
+            <li><span class="steptag">citation integrity</span>When reviewing, verifies references and assigns <b>VERIFIED / PARTIALLY_VERIFIED / UNVERIFIED / REJECTED</b>; only VERIFIED may support a claim. Flags prior art that threatens the central claim.</li>
+          </ul>
+          <h5 class="stop-h">Never does</h5>
+          <ul>
+            <li>Plan, order the queue, or write contracts / run prompts — that is CLAUDE-CHIEF.</li>
+            <li>Launch, control, or expand an executor task (Rule 3).</li>
+            <li>Speak outside the four gates — otherwise the planner runs.</li>
+          </ul>
+        </div>
+        <div class="col">
+          <dl class="kv">
+            <dt>Input</dt><dd>Clean critic packet, STATE.md, result JSONs, references under review.</dd>
+            <dt>Output</dt><dd>Pass / Concern / Blocker verdict with evidence; reference states.</dd>
+            <dt>Handoff</dt><dd><span class="handoff">→ LAB-DIRECTOR</span> (go/no-go) · <span class="handoff">→ CLAUDE-CHIEF</span> (required fixes).</dd>
+            <dt>Approval</dt><dd>Critic advises; the director makes every final call. G1/G3 require a critic Pass.</dd>
+            <dt>W&amp;B</dt><dd>Read-only.</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 4 — Codex role -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">04</span>
+      <h2>Codex</h2>
+      <span class="note">run and audit — never interpret</span>
+    </div>
+    <p class="lead">Codex is the execution platform, one context. It runs approved jobs and, as a required step, invokes the deterministic gatekeeper before and after. It reports exactly what happened; it never judges a scientific result.</p>
+
+    <div class="role-card">
+      <div class="top">
+        <span class="rid">X1</span>
+        <span class="rname">CODEX-RUNNER</span>
+        <span class="rplat">Codex · execute + audit</span>
+        <span class="rtag badge b-block">launch-gated</span>
+      </div>
+      <div class="cols">
+        <div class="col left">
+          <h5>Main tasks</h5>
+          <ul>
+            <li>Controlled execution of approved runs on the GPU host (5070 Ti / Colab).</li>
+            <li>Reports commands, exit codes, and confirmations verbatim.</li>
+            <li>Produces run artifacts and result JSONs under <span style="font-family:var(--mono)">results/&lt;run&gt;/s&lt;seed&gt;/</span>.</li>
+          </ul>
+          <h5 class="step-h">Folded-in step</h5>
+          <ul>
+            <li><span class="steptag">audit</span>Runs the version-controlled gatekeeper scripts (in-path, ASCII PASS/FAIL tokens, no emoji) and blocks protected-test-set misuse. The script is fixed and cannot be edited mid-run — that is what keeps the audit independent, not the persona.</li>
+          </ul>
+          <h5 class="stop-h">Never does</h5>
+          <ul>
+            <li>Modify code, configs, thresholds, or the gatekeeper script mid-task.</li>
+            <li>Launch an un-gated or un-authorized run.</li>
+            <li>Interpret results or change a run name off-contract.</li>
+          </ul>
+        </div>
+        <div class="col">
+          <dl class="kv">
+            <dt>Input</dt><dd>Approved run contract + explicit launch authorization; gatekeeper scripts.</dd>
+            <dt>Output</dt><dd>Command logs, exit codes, run artifacts, result JSONs, PASS/FAIL tokens.</dd>
+            <dt>Handoff</dt><dd><span class="handoff">→ LAB-DIRECTOR</span> relays results + audit <span class="handoff">→ ATLAS-CRITIC</span> / <span class="handoff">→ CLAUDE-CHIEF</span>.</dd>
+            <dt>Approval</dt><dd>Launch requires director authorization + a passed critic gate. Audit itself needs none — deterministic.</dd>
+            <dt>W&amp;B</dt><dd>Creates/logs runs under authorized names only.</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <b>Handoff rule.</b> Every Claude → Claude Code or Codex → Claude handoff must carry a short summary of what the previous agent did and its results (token saving, no repo re-read). The <b>director is the only bridge</b> that relays Codex output and the clean critic packet between the Claude (planner) loop and the ChatGPT (critic) loop.
+    </div>
+  </section>
+
+  <!-- SECTION 5 — the four gates -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">05</span>
+      <h2>The four critic gates</h2>
+      <span class="note">outside these · critic is silent</span>
+    </div>
+    <p class="lead">ChatGPT criticizes only at these four moments — the high-cost, hard-to-reverse decisions from the charter's human-in-the-loop list. Everywhere else the planner runs. G4 is new in v2: because the planner now also authors the plan, a direction change is the point most likely to drift unchecked.</p>
+    <table class="gates">
+      <thead>
+        <tr><th>Gate</th><th>Fires before</th><th>Why it exists</th><th>Rule</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="gid">G1</span></td><td>Locking a threshold / pre-registration (protocol + metric)</td><td>Commitment that cannot be walked back after seeing results</td><td class="mono">critic Pass required</td></tr>
+        <tr><td><span class="gid">G2</span></td><td>Launching &gt;1 training run (or any high-compute run)</td><td>Spends real compute via the runner</td><td class="mono">director + Pass</td></tr>
+        <tr><td><span class="gid">G3</span></td><td>Writing a final / authorized paper claim</td><td>Claim formation — the scientific output itself</td><td class="mono">critic Pass required</td></tr>
+        <tr class="new"><td><span class="gid">G4</span></td><td>Changing research direction: add/remove arm, change hypothesis, pivot method</td><td>NEW — the drift point now that planner authors the plan</td><td class="mono">director + Pass</td></tr>
+      </tbody>
+    </table>
+    <div class="callout">
+      <b>Verdict states.</b> <span class="badge b-pass">Pass</span> proceed · <span class="badge b-block">Concern</span> proceed only after the director resolves it · <span class="badge b-wait">Blocker</span> stop until fixed and re-reviewed. Protected-test-set usage is <i>not</i> a critic gate — CODEX-RUNNER's audit step blocks it deterministically.
+    </div>
+  </section>
+
+  <!-- SECTION 6 — task triage -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">06</span>
+      <h2>Task triage — when the critic intervenes</h2>
+      <span class="note">most tasks skip the critic</span>
+    </div>
+    <p class="lead">Not every task deserves the full pipeline. CLAUDE-CHIEF runs a five-second trigger test at intake and routes the task into one of three lanes, bound to the charter's pace modes (§7). The independent critic (ChatGPT) is invoked only in the critical lane — everyday work runs in 3–5 steps with no critic, no packet, no self-red-team.</p>
+
+    <div class="callout warn">
+      <b>Trigger test.</b> Any <b>YES</b> → Tier C (critic gate). All <b>NO</b> → fast path.
+      <ol style="margin:10px 0 0; padding-left:20px; font-size:14px;">
+        <li>Does it <b>lock</b> a protocol / threshold / metric? <span style="font-family:var(--mono); color:var(--accent);">(G1)</span></li>
+        <li>Does it spend <b>large compute</b> — a batch of &gt;1 run, or a long run? <span style="font-family:var(--mono); color:var(--accent);">(G2)</span></li>
+        <li>Does it produce a <b>claim that will go in the paper</b>? <span style="font-family:var(--mono); color:var(--accent);">(G3)</span></li>
+        <li>Does it <b>change research direction</b> — add/remove arm, change hypothesis, pivot method? <span style="font-family:var(--mono); color:var(--accent);">(G4)</span></li>
+      </ol>
+    </div>
+
+    <table class="gates" style="margin-top:20px;">
+      <thead>
+        <tr><th>Tier</th><th>Pace mode</th><th>Examples</th><th>Pipeline</th><th>Critic</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="gid">A</span><br><span style="font-family:var(--mono); font-size:11px; color:var(--muted);">trivial</span></td>
+          <td class="mono">FAST_EXECUTION</td>
+          <td>Format, refactor, logging, read/summarize, re-analyze existing results, bug fix not touching protocol</td>
+          <td>Director asks → Chief does it / dispatches Builder-Runner → report <b>(~3 steps)</b></td>
+          <td class="mono">none</td>
+        </tr>
+        <tr>
+          <td><span class="gid">B</span><br><span style="font-family:var(--mono); font-size:11px; color:var(--muted);">normal</span></td>
+          <td class="mono">NORMAL_COLLAB</td>
+          <td>Design a small experiment, a single diagnostic run, draft an analysis, propose an idea</td>
+          <td>Chief plan + light self-red-team → director decides → execute → Chief records <b>(~5 steps)</b></td>
+          <td class="mono">optional*</td>
+        </tr>
+        <tr class="new">
+          <td><span class="gid">C</span><br><span style="font-family:var(--mono); font-size:11px; color:var(--accent);">critical</span></td>
+          <td class="mono">SLOW_LEARNING</td>
+          <td>Any task that hits a trigger above (G1–G4)</td>
+          <td>Full: intent gate → clean packet → critic Pass → decision gate <b>(13 steps)</b></td>
+          <td class="mono">mandatory</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size:12.5px; color:var(--muted); margin-top:8px; font-family:var(--mono);">* Tier B critic is optional — invoked only if the director wants a second opinion. It is never a required gate.</p>
+
+    <div class="callout">
+      <b>Gate the decision, not the run.</b> A single diagnostic run is Tier B — the director authorizes it, no critic. The critic enters only when a <i>batch</i> &gt;1 launches, or when its result is used to <b>make a commitment</b> (lock a threshold, pivot direction, write a claim) — and then it is that decision (G1/G3/G4) being gated, not the compute. Explore freely; pay the critic's attention only when turning a result into a commitment.
+    </div>
+    <div class="callout">
+      <b>Who classifies.</b> CLAUDE-CHIEF proposes the tier via the trigger test and handles Tier A directly. For <b>Tier C or anything ambiguous</b> it confirms the tier with the director in one word before packaging the packet. Default leans to the lighter lane; escalating to C requires an explicit trigger.
+    </div>
+  </section>
+
+  <!-- SECTION 7 — Where things live -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">07</span>
+      <h2>Where each thing lives</h2>
+      <span class="note">two layers · least stale</span>
+    </div>
+    <p class="lead">Two document layers, kept separate so nothing goes stale. This registry answers <i>who does what</i>; the prompts answer <i>how to task that agent</i>. Experiment status and governance live elsewhere and are never duplicated here.</p>
+    <div class="map">
+      <div class="box keep">
+        <h3>Keep here</h3>
+        <div class="sub">stable role boundaries</div>
+        <ul>
+          <li><span class="f">docs/AI_LAB_ROLES.md</span> <span class="d">— this registry: the map of all roles.</span></li>
+          <li><span class="f">docs/AI_LAB_FLOW.html</span> <span class="d">— the pipeline + gate flow view.</span></li>
+          <li><span class="f">prompts/&lt;agent&gt;.md</span> <span class="d">— one operational prompt per role.</span></li>
+          <li><span class="f">prompts/critic_packet.md</span> <span class="d">— clean packet template for ATLAS-CRITIC.</span></li>
+        </ul>
+      </div>
+      <div class="box avoid">
+        <h3>Do not put roles here</h3>
+        <div class="sub">stays scoped, stays fresh</div>
+        <ul>
+          <li><span class="f">docs/RESEARCH_CHARTER.md</span> <span class="d">— governance + abstract roles only.</span></li>
+          <li><span class="f">docs/STATE.md</span> <span class="d">— current research status only.</span></li>
+          <li><span class="f">AGENTS.md</span> <span class="d">— Codex + repo governance only.</span></li>
+          <li><span class="f">CLAUDE.md</span> <span class="d">— Claude Code Builder only.</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="tree"><span class="c">docs/</span>
+├── RESEARCH_CHARTER.md   <span class="g"># governance + abstract roles (DIRECTOR/CHIEF/CRITIC/EXECUTOR/AUDIT)</span>
+├── STATE.md              <span class="g"># current experiment status (source of truth)</span>
+├── AI_LAB_ROLES.md       <span class="g"># this registry — who does what (role→agent binding)</span>
+├── AI_LAB_FLOW.html      <span class="g"># pipeline + gate flow</span>
+└── dashboard.html        <span class="g"># rendered from STATE + result JSONs</span>
+
+<span class="c">prompts/</span>          <span class="g"># how to task each agent (4 roles)</span>
+├── claude_chief.md
+├── claude_builder.md
+├── atlas_critic.md
+├── codex_runner.md
+└── critic_packet.md      <span class="g"># clean-packet template (no verdict / no framing)</span>
+
+AGENTS.md                 <span class="g"># Codex + repo governance</span>
+CLAUDE.md                 <span class="g"># Claude Code Builder</span></div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="wrap" style="display:flex; justify-content:space-between; width:100%; flex-wrap:wrap; gap:10px;">
+    <span>ATTACKDRO · AI lab role registry v2 lean · role boundaries, not run state</span>
+    <span>LAB-DIRECTOR authorizes all decisions · RESEARCH_CHARTER governs · STATE governs status</span>
+  </div>
+</footer>
+</body>
+</html>
